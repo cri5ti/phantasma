@@ -1,0 +1,33 @@
+{
+  "name": "mvgen",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Music video generator: audio-reactive visualizers + stock footage compositing, scripted with Remotion",
+  "scripts": {
+    "analyze": "node scripts/analyze.mjs",
+    "media": "node scripts/media.mjs",
+    "edit": "node scripts/edit.mjs",
+    "render": "node scripts/render.mjs",
+    "still": "node scripts/render.mjs --still",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^1.4.0",
+    "@remotion/cli": "4.0.540",
+    "@remotion/player": "4.0.540",
+    "immer": "^10.2.0",
+    "openai": "^7.50.0",
+    "react": "19.2.0",
+    "react-dom": "19.2.0",
+    "remotion": "4.0.540"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "@types/react": "^19.2.0",
+    "@types/react-dom": "^19.2.0",
+    "@vitejs/plugin-react": "^5.1.0",
+    "typescript": "^5.9.0",
+    "vite": "^7.2.0"
+  }
+}

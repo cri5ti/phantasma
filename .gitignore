@@ -1,0 +1,21 @@
+# dependencies
+node_modules/
+
+# secrets - copy .env.example instead
+.env
+.env.*
+!.env.example
+
+# per-song working data / renders if they ever live inside this folder
+_mvgen/
+out/
+
+# python / editor / OS noise
+__pycache__/
+*.pyc
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+*.log
+*.tmp
