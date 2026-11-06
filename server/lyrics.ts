@@ -1,6 +1,6 @@
-// Lyrics timing jobs. Each one is logged as a run in the AI log (_mvgen/ai-log) so progress is visible live.
+// Lyrics timing jobs. Each one is logged as a run in the AI log (_phantasma/ai-log) so progress is visible live.
 //   transcribe  OpenAI whisper-1, per-word timestamps (MV_TRANSCRIBE_MODEL to override)
-//   separate    local Demucs vocal stem → _mvgen/lyrics/vocals.wav (better transcripts + alignment)
+//   separate    local Demucs vocal stem → _phantasma/lyrics/vocals.wav (better transcripts + alignment)
 //   refine      local forced alignment of the lyric words (torchaudio MMS_FA) → precise word boundaries
 import fs from 'node:fs';
 import path from 'node:path';
@@ -11,7 +11,7 @@ import type { AiLog, AiRun } from './aiLog';
 const AUDIO_EXT = ['.wav', '.mp3', '.flac', '.m4a', '.aac', '.ogg'];
 
 export function lyricsApi(root: string, project: string, ai: AiLog) {
-  const dir = path.join(project, '_mvgen', 'lyrics');
+  const dir = path.join(project, '_phantasma', 'lyrics');
   const f = (n: string) => path.join(dir, n);
   const songFile = () => {
     try {
@@ -118,7 +118,7 @@ export function lyricsApi(root: string, project: string, ai: AiLog) {
     }
     if (p === '/api/lyrics/transcribe' && req.method === 'POST') {
       const o = await body();
-      if (!process.env.OPENAI_API_KEY) throw new Error('set OPENAI_API_KEY in mvgen/.env (transcription uses OpenAI whisper-1)');
+      if (!process.env.OPENAI_API_KEY) throw new Error('set OPENAI_API_KEY in phantasma/.env (transcription uses OpenAI whisper-1)');
       const id = background('transcribe', process.env.MV_TRANSCRIBE_MODEL || 'whisper-1', `transcribe${o.useVocals ? ' (vocal stem)' : ''}${o.prompt ? `
 
 lyrics hint:
@@ -136,7 +136,7 @@ ${o.prompt.slice(0, 800)}` : ''}`, (run) => transcribe(run, o), 'openai');
         const stem = path.join(out, 'htdemucs', path.parse(song).name, 'vocals.wav');
         if (!fs.existsSync(stem)) throw new Error(`demucs finished but ${stem} is missing`);
         fs.copyFileSync(stem, f('vocals.wav'));
-        return { vocals: '_mvgen/lyrics/vocals.wav' };
+        return { vocals: '_phantasma/lyrics/vocals.wav' };
       });
       send(res, 200, { runId: id });
       return true;

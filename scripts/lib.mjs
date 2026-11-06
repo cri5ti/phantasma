@@ -7,7 +7,7 @@ export const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '
 export const AUDIO_EXT = ['.wav', '.mp3', '.flac', '.m4a', '.aac', '.ogg'];
 export const VIDEO_EXT = ['.mp4', '.mov', '.webm', '.mkv', '.m4v'];
 export const IMAGE_EXT = ['.png', '.jpg', '.jpeg', '.webp', '.gif'];
-export const WORK = '_mvgen';
+export const WORK = '_phantasma';
 export const PROJECT_FILE = 'mv.project.json';
 
 /** Project dir = first non-flag CLI arg, else $MV_PROJECT, else cwd. */

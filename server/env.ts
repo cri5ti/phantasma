@@ -1,4 +1,4 @@
-// Minimal .env loader: mvgen/.env then <project>/.env. Never overrides variables already set in the shell.
+// Minimal .env loader: phantasma/.env then <project>/.env. Never overrides variables already set in the shell.
 import fs from 'node:fs';
 import path from 'node:path';
 

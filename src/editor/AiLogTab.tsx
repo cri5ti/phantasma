@@ -1,4 +1,4 @@
-// AI log: every LLM request this song folder has made (_mvgen/ai-log/), with live progress for running ones.
+// AI log: every LLM request this song folder has made (_phantasma/ai-log/), with live progress for running ones.
 import React, { useEffect, useState } from 'react';
 import { store, useStore } from './store';
 
@@ -63,7 +63,7 @@ export const AiLogTab: React.FC = () => {
             <span className="dim">{dur(r)}</span>
           </div>
         ))}
-        {!runs.length ? <div className="hint pad">No AI runs yet. Every request (Suggest ideas, Plan storyboard, re-plans) shows up here with its prompt, the model's thinking summary and the raw response. Files: <code>_mvgen/ai-log/</code>.</div> : null}
+        {!runs.length ? <div className="hint pad">No AI runs yet. Every request (Suggest ideas, Plan storyboard, re-plans) shows up here with its prompt, the model's thinking summary and the raw response. Files: <code>_phantasma/ai-log/</code>.</div> : null}
       </div>
       {run && run.id === id ? (
         <div className="ai-detail">
@@ -86,7 +86,7 @@ export const AiLogTab: React.FC = () => {
           <Block title="Response" text={pretty(run.text)} />
           <Block title="Prompt — system" text={run.system} />
           <Block title="Prompt — user" text={run.user} />
-          <div className="hint">Saved as <code>_mvgen/ai-log/{run.id}.json</code></div>
+          <div className="hint">Saved as <code>_phantasma/ai-log/{run.id}.json</code></div>
         </div>
       ) : null}
     </div>

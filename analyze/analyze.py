@@ -1,4 +1,4 @@
-"""Audio analysis for mvgen.
+"""Audio analysis for phantasma.
 
 Writes <out_dir>/analysis.json plus binary feature tracks sampled at RATE Hz:
   bands.u8   frames x N_BANDS  log-mel band energy, per-band normalised 0..255

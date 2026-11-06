@@ -174,7 +174,7 @@ const TopBar: React.FC = () => {
   const mode = useStore((s) => s.mode);
   return (
     <div className="topbar">
-      <span className="logo">mvgen</span>
+      <span className="logo">phantasma</span>
       <span className="pname" onClick={() => store.set({ sel: {} })} title="project settings">{name}</span>
       <span className={`save ${saveState}`}>{saveState}</span>
       <button disabled={!canUndo} onClick={() => store.doUndo()} title="Ctrl+Z">↶</button>

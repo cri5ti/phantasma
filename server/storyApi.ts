@@ -24,16 +24,16 @@ export function storyApi(root: string, project: string) {
   const MEDIA_EXT = new Set(['.mp4', '.mov', '.webm', '.mkv', '.m4v', '.png', '.jpg', '.jpeg', '.webp', '.gif']);
   const onDisk = (rel = ''): string[] =>
     fs.readdirSync(path.join(project, rel), { withFileTypes: true }).flatMap((e) => {
-      if (e.name.startsWith('.') || e.name === '_mvgen' || e.name === 'node_modules' || e.name === 'out') return [];
+      if (e.name.startsWith('.') || e.name === '_phantasma' || e.name === 'node_modules' || e.name === 'out') return [];
       const r = rel ? `${rel}/${e.name}` : e.name;
       return e.isDirectory() ? onDisk(r) : MEDIA_EXT.has(path.extname(e.name).toLowerCase()) ? [r] : [];
     });
   const known = (): Set<string> => {
-    try { return new Set(JSON.parse(fs.readFileSync(path.join(project, '_mvgen', 'media.json'), 'utf8')).media.map((m: any) => m.src)); } catch { return new Set(); }
+    try { return new Set(JSON.parse(fs.readFileSync(path.join(project, '_phantasma', 'media.json'), 'utf8')).media.map((m: any) => m.src)); } catch { return new Set(); }
   };
   let scanning: Promise<void> | null = null;
   const ai = new AiLog(project);
-  initSearchCache(path.join(project, '_mvgen', 'stock-cache.json'));
+  initSearchCache(path.join(project, '_phantasma', 'stock-cache.json'));
   const lyrics = lyricsApi(root, project, ai);
 
   return async (req: any, res: any, url: URL, body: () => Promise<any>, send: Send): Promise<boolean> => {

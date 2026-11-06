@@ -7,7 +7,7 @@ import { storyApi } from './server/storyApi';
 
 const ROOT = __dirname;
 const PROJECT = path.resolve(process.env.MV_PROJECT ?? process.cwd());
-const WORK = path.join(PROJECT, '_mvgen');
+const WORK = path.join(PROJECT, '_phantasma');
 const PROJECT_FILE = path.join(PROJECT, 'mv.project.json');
 const AUDIO_EXT = ['.wav', '.mp3', '.flac', '.m4a', '.aac', '.ogg'];
 
@@ -46,7 +46,7 @@ function api(): Plugin {
   };
   const story = storyApi(ROOT, PROJECT);
   return {
-    name: 'mvgen-api',
+    name: 'phantasma-api',
     configureServer(server) {
       server.middlewares.use(async (req, res, next) => {
         const url = req.url ?? '';
