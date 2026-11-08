@@ -1,8 +1,10 @@
-import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import React, { useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import {
-  AbsoluteFill, Audio, cancelRender, continueRender, delayRender, Img, Loop, OffthreadVideo, Sequence,
+  AbsoluteFill, Audio, cancelRender, continueRender, delayRender, getRemotionEnvironment, Img, Loop, OffthreadVideo, Sequence,
   staticFile, useCurrentFrame, useVideoConfig,
 } from 'remotion';
+import { assetsVersion, configureAssets, onAssets, preloadImages } from '../gen/assets';
+import { preloadScenes, watchScenes } from '../gen/scene';
 import { loadAnalysis, type AudioData } from '../core/audio';
 import { evalParams } from '../core/params';
 import { Tempo } from '../core/tempo';
@@ -31,7 +33,7 @@ export function makeAsset(base: string | null | undefined) {
   return (p: string) => (/^https?:\/\//.test(p) ? p : base != null ? base + p.split('/').map(encodeURIComponent).join('/') : staticFile(p));
 }
 
-function useAnalysis(asset: (p: string) => string) {
+function useAnalysis(asset: (p: string) => string, hasAudio: boolean) {
   const [audio, setAudio] = useState<AudioData | null>(null);
   const [handle] = useState(() => delayRender('Loading audio analysis'));
   useEffect(() => {
@@ -40,7 +42,8 @@ function useAnalysis(asset: (p: string) => string) {
         setAudio(a);
         continueRender(handle);
       })
-      .catch((e) => cancelRender(e));
+      // a project without a song (lyrics stage) has no analysis yet: render silent instead of failing
+      .catch((e) => (hasAudio ? cancelRender(e) : continueRender(handle)));
   }, []);
   return audio;
 }
@@ -92,14 +95,46 @@ function useFonts(project: Project) {
   return ver;
 }
 
+/**
+ * Images + scene files used by generator layers / masks: preloaded before the first frame renders (Remotion), hot-reloaded
+ * in the editor. Returns a version that changes whenever something finished loading, so the canvases redraw.
+ */
+function useGenAssets(project: Project, asset: (p: string) => string, media: Map<string, MediaItem>) {
+  configureAssets(asset, media);
+  const ver = useSyncExternalStore(onAssets, assetsVersion);
+  const uses = useMemo(
+    () => project.layers.flatMap((l) => [{ gen: l.gen, params: l.params as Record<string, unknown> }, ...l.masks.map((m) => ({ gen: m.gen, params: m.params as Record<string, unknown> }))])
+      .filter((u) => u.gen === 'image' || u.gen?.startsWith('scene:')),
+    [project.layers],
+  );
+  const key = JSON.stringify(uses.map((u) => [u.gen, u.gen === 'image' ? u.params.src : Object.entries(u.params).filter(([k]) => k.startsWith('tex_'))]));
+  const rendering = getRemotionEnvironment().isRendering;
+  useLayoutEffect(() => {
+    if (!uses.length) return;
+    const h = delayRender(`Loading scenes / images`);
+    Promise.all([preloadScenes(uses), preloadImages(uses.filter((u) => u.gen === 'image').map((u) => String(u.params.src ?? '')))])
+      .then(([problems]) => {
+        // the editor shows scene errors on the layer; a final render must not silently drop a layer
+        if (problems.length && rendering) cancelRender(new Error(`scene error:\n${problems.join('\n')}`));
+        else continueRender(h);
+      })
+      .catch((e) => cancelRender(e));
+  }, [key]);
+  useEffect(() => {
+    if (!rendering) watchScenes();
+  }, []);
+  return ver;
+}
+
 export const MV: React.FC<MVProps> = ({ project, media, assetBase, useProxies, renderScale = 1, maskScale = 0.5 }) => {
   const frame = useCurrentFrame();
   const { fps, width: W, height: H } = useVideoConfig();
   const asset = useMemo(() => makeAsset(assetBase), [assetBase]);
-  const audio = useAnalysis(asset);
+  const audio = useAnalysis(asset, !!project.audio);
   const fontVer = useFonts(project);
-  const tempo = useMemo(() => new Tempo(project.tempo, audio?.meta.beats ?? [], project.duration), [project.tempo, audio, project.duration]);
   const mediaMap = useMemo(() => new Map(media.map((m) => [m.id, m])), [media]);
+  useGenAssets(project, asset, mediaMap); // re-renders (→ redraws) when scenes / images land
+  const tempo = useMemo(() => new Tempo(project.tempo, audio?.meta.beats ?? [], project.duration), [project.tempo, audio, project.duration]);
   const t = frame / fps;
   const env: Env = { t, fps, W, H, audio, tempo, media: mediaMap, lyrics: project.lyrics };
 

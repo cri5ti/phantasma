@@ -8,7 +8,7 @@ const VERT = `#version 300 es
 in vec2 p; out vec2 vUv;
 void main(){ vUv = p*0.5+0.5; gl_Position = vec4(p,0.,1.); }`;
 
-const HEADER = `#version 300 es
+export const HEADER = `#version 300 es
 precision highp float;
 in vec2 vUv; out vec4 outColor;
 uniform vec2 uRes; uniform float uTime, uTravel, uBeat, uPulse, uBar, uBass, uMid, uHigh, uRms, uOnset;
@@ -20,10 +20,13 @@ float noise(vec2 p){ vec2 i=floor(p), f=fract(p); f=f*f*(3.-2.*f);
 float fbm(vec2 p){ float v=0., a=.5; for(int i=0;i<6;i++){ v+=a*noise(p); p=p*2.03+vec2(1.7,9.2); a*=.5; } return v; }
 `;
 
-class GL {
+export type Wrap = 'clamp' | 'repeat' | 'mirror';
+
+export class GL {
   canvas: HTMLCanvasElement;
   gl: WebGL2RenderingContext;
   programs = new Map<string, { prog: WebGLProgram; loc: Map<string, WebGLUniformLocation | null> }>();
+  textures = new WeakMap<TexImageSource, WebGLTexture>();
   constructor() {
     this.canvas = document.createElement('canvas');
     const gl = this.canvas.getContext('webgl2', { premultipliedAlpha: false, preserveDrawingBuffer: true, alpha: true });
@@ -54,6 +57,34 @@ class GL {
     this.programs.set(id, p);
     return p;
   }
+  /** drop compiled programs whose id starts with prefix (scene hot-reload) */
+  forget(prefix: string) {
+    for (const [id, p] of this.programs) {
+      if (!id.startsWith(prefix)) continue;
+      this.gl.deleteProgram(p.prog);
+      this.programs.delete(id);
+    }
+  }
+  /** Bind an image to texture unit `unit` (uploaded once per image, mipmapped, uv origin bottom-left like vUv). */
+  bindTexture(unit: number, img: TexImageSource, wrap: Wrap = 'clamp') {
+    const gl = this.gl;
+    gl.activeTexture(gl.TEXTURE0 + unit);
+    let tex = this.textures.get(img);
+    if (!tex) {
+      tex = gl.createTexture()!;
+      gl.bindTexture(gl.TEXTURE_2D, tex);
+      gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true);
+      gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, img);
+      gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, false);
+      gl.generateMipmap(gl.TEXTURE_2D);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR_MIPMAP_LINEAR);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+      this.textures.set(img, tex);
+    } else gl.bindTexture(gl.TEXTURE_2D, tex);
+    const w = wrap === 'repeat' ? gl.REPEAT : wrap === 'mirror' ? gl.MIRRORED_REPEAT : gl.CLAMP_TO_EDGE;
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, w);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, w);
+  }
   render(id: string, frag: string, w: number, h: number, set: (u: (name: string) => WebGLUniformLocation | null, gl: WebGL2RenderingContext) => void) {
     const gl = this.gl;
     if (this.canvas.width !== w || this.canvas.height !== h) {
@@ -78,9 +109,42 @@ class GL {
 }
 
 let shared: GL | null = null;
-const getGL = () => (shared ??= new GL());
+export const getGL = () => (shared ??= new GL());
 
 const spec32 = new Float32Array(32);
+
+type U = (name: string) => WebGLUniformLocation | null;
+
+/** The uniforms every shader gets (declared in HEADER). */
+export function setStdUniforms(u: U, gl: WebGL2RenderingContext, f: FrameCtx, w: number, h: number, travel: number) {
+  const a = f.audio;
+  if (a) a.bars(f.t, 32, 0.08, 0, 0.95, spec32);
+  else spec32.fill(0);
+  gl.uniform2f(u('uRes'), w, h);
+  gl.uniform1f(u('uTime'), f.t);
+  gl.uniform1f(u('uTravel'), travel);
+  gl.uniform1f(u('uBeat'), f.beat.beat);
+  gl.uniform1f(u('uPulse'), Math.exp(-f.beat.sinceBeat / 0.15));
+  gl.uniform1f(u('uBar'), Math.exp(-f.beat.sinceBar / 0.4));
+  gl.uniform1f(u('uBass'), a ? a.scalar('bass', f.t, 0.1) : 0);
+  gl.uniform1f(u('uMid'), a ? a.scalar('mid', f.t, 0.1) : 0);
+  gl.uniform1f(u('uHigh'), a ? a.scalar('high', f.t, 0.1) : 0);
+  gl.uniform1f(u('uRms'), a ? a.scalar('rms', f.t, 0.1) : 0);
+  gl.uniform1f(u('uOnset'), a ? a.scalar('onset', f.t, 0.05) : 0);
+  gl.uniform1fv(u('uSpec[0]'), spec32);
+}
+
+/** number → float u_<key>, bool → float 0/1, color → vec4 u_<key> (0..1). */
+export function setParamUniforms(u: U, gl: WebGL2RenderingContext, defs: ParamDef[], p: Values) {
+  for (const d of defs) {
+    if (d.type === 'number') gl.uniform1f(u(`u_${d.key}`), Number(p[d.key]) || 0);
+    else if (d.type === 'bool') gl.uniform1f(u(`u_${d.key}`), p[d.key] ? 1 : 0);
+    else if (d.type === 'color') {
+      const c = parseColor(String(p[d.key]));
+      gl.uniform4f(u(`u_${d.key}`), c[0] / 255, c[1] / 255, c[2] / 255, c[3]);
+    }
+  }
+}
 
 interface ShaderSpec {
   id: string;
@@ -110,27 +174,9 @@ function shaderGen(s: ShaderSpec): GenDef {
       const a = f.audio;
       const src = p.drive as ScalarName | 'none';
       const travel = p.speed * (f.t + (a && src !== 'none' ? p.driveAmount * a.integral(src, f.t) : 0));
-      if (a) a.bars(f.t, 32, 0.08, 0, 0.95, spec32);
       const canvas = getGL().render(s.id, s.frag, w, h, (u, gl) => {
-        gl.uniform2f(u('uRes'), w, h);
-        gl.uniform1f(u('uTime'), f.t);
-        gl.uniform1f(u('uTravel'), travel);
-        gl.uniform1f(u('uBeat'), f.beat.beat);
-        gl.uniform1f(u('uPulse'), Math.exp(-f.beat.sinceBeat / 0.15));
-        gl.uniform1f(u('uBar'), Math.exp(-f.beat.sinceBar / 0.4));
-        gl.uniform1f(u('uBass'), a ? a.scalar('bass', f.t, 0.1) : 0);
-        gl.uniform1f(u('uMid'), a ? a.scalar('mid', f.t, 0.1) : 0);
-        gl.uniform1f(u('uHigh'), a ? a.scalar('high', f.t, 0.1) : 0);
-        gl.uniform1f(u('uRms'), a ? a.scalar('rms', f.t, 0.1) : 0);
-        gl.uniform1f(u('uOnset'), a ? a.scalar('onset', f.t, 0.05) : 0);
-        gl.uniform1fv(u('uSpec[0]'), spec32);
-        for (const d of custom) {
-          if (d.type === 'number') gl.uniform1f(u(`u_${d.key}`), p[d.key]);
-          else {
-            const c = parseColor(p[d.key]);
-            gl.uniform4f(u(`u_${d.key}`), c[0] / 255, c[1] / 255, c[2] / 255, c[3]);
-          }
-        }
+        setStdUniforms(u, gl, f, w, h, travel);
+        setParamUniforms(u, gl, custom, p);
       });
       // drawn in stage units so the layer transform (scale/rotate/offset) applies
       ctx.drawImage(canvas, 0, 0, f.W, f.H);

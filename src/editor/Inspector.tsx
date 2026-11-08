@@ -1,10 +1,12 @@
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useState, useSyncExternalStore } from 'react';
 import type { Draft } from 'immer';
 import { COMMON_PARAMS, TRAIL_PARAMS, VIDEO_PARAMS, MEDIA_PARAMS } from '../comp/common';
 import { defaults, type ParamDef } from '../core/params';
 import { newMask } from '../core/project';
 import { BLEND_MODES, type Layer, type Mask, type ParamValue, type Project } from '../core/types';
+import { assetsVersion, onAssets } from '../gen/assets';
 import { getGen, GENERATORS } from '../gen/registry';
+import { isSceneId, loadScene, sceneError, sceneFile } from '../gen/scene';
 import { ParamField } from './ParamField';
 import { fmtTime, store, useStore, useTime } from './store';
 import { TempoPanel } from './TempoPanel';
@@ -51,9 +53,12 @@ function editLayer(id: string, fn: (l: Draft<Layer>) => void, merge?: string) {
 
 const LayerInspector: React.FC<{ layer: Layer }> = ({ layer }) => {
   const media = useStore((s) => s.media);
+  // scenes load / hot-reload asynchronously and can change their params
+  const assetVer = useSyncExternalStore(onAssets, assetsVersion);
   const gen = getGen(layer.gen);
   const typeDefs: ParamDef[] = layer.kind === 'gen' ? [...(gen?.params ?? []), ...TRAIL_PARAMS] : layer.kind === 'video' ? VIDEO_PARAMS : MEDIA_PARAMS;
-  const groups = useMemo(() => groupBy([...typeDefs, ...COMMON_PARAMS]), [layer.kind, layer.gen]);
+  const groups = useMemo(() => groupBy([...typeDefs, ...COMMON_PARAMS]), [layer.kind, layer.gen, gen]);
+  const sceneErr = isSceneId(layer.gen) ? sceneError(layer.gen) : undefined;
   const setParam = (key: string) => (v: ParamValue | undefined, merge?: string) =>
     editLayer(layer.id, (l) => {
       if (v === undefined) delete l.params[key];
@@ -70,6 +75,17 @@ const LayerInspector: React.FC<{ layer: Layer }> = ({ layer }) => {
         <input className="name" value={layer.name} onChange={(e) => editLayer(layer.id, (l) => { l.name = e.target.value; }, `${layer.id}.name`)} />
         <span className="tag">{layer.kind === 'gen' ? gen?.name : layer.kind}</span>
       </div>
+      {isSceneId(layer.gen) ? (
+        <Section title="Scene" key={assetVer}>
+          <div className="grid2">
+            <label>File</label>
+            <span className="scene-file" title="edit the file in your editor — it reloads on save">{sceneFile(layer.gen)}</span>
+            <label />
+            <button onClick={() => loadScene(sceneFile(layer.gen!), true)}>↻ Reload</button>
+          </div>
+          {sceneErr ? <pre className="scene-error">{sceneErr}</pre> : <div className="hint">Edit the .frag file, save, and the layer recompiles. Header lines <code>// @param</code> and <code>// @tex</code> define the controls below.</div>}
+        </Section>
+      ) : null}
       {gen?.presets ? (
         <Section title="Preset">
           <div className="grid2">

@@ -12,10 +12,13 @@ import { RenderScreen, RenderStatus, closeRender, openRender } from './RenderScr
 import { FootageMenu } from './FootageMenu';
 import { HoverPeek, PeekOverlay } from './Peek';
 import { groupLayers, groupOf, pruneGroups, selectedLayerIds, ungroup } from './groups';
+import { copyKeys, deleteKeys, hasClipKeys, pasteKeys } from './dopesheet';
 import { StoryOverlay } from './StoryOverlay';
 import { StoryPanel } from './StoryPanel';
 import { fmtTime, store, useStore, useTempo, useTime } from './store';
 import { Timeline } from './Timeline';
+import { useZoomPan } from './useZoomPan';
+import { LyricsScreen } from './lyrics/LyricsScreen';
 
 const Preview: React.FC = () => {
   const project = useStore((s) => s.project);
@@ -40,6 +43,7 @@ const Preview: React.FC = () => {
     [project, allMedia, useProxies, previewScale],
   );
   const peek = useStore((s) => s.peek);
+  const zp = useZoomPan();
 
   useEffect(() => {
     const p = ref.current;
@@ -68,6 +72,8 @@ const Preview: React.FC = () => {
 
   return (
     <div className="preview">
+      <div className="pv-view" ref={zp.viewRef}>
+      <div className="pv-zoom" ref={zp.zoomRef}>
       <Player
         ref={ref}
         component={MV}
@@ -87,6 +93,16 @@ const Preview: React.FC = () => {
         acknowledgeRemotionLicense
       />
       {mode === 'story' && sbOverlay && hasShots ? <StoryOverlay /> : null}
+      </div>
+      </div>
+      {mode === 'edit' ? (
+        <button className="fs-btn" title="full screen (Esc to exit)" onClick={() => ref.current?.requestFullscreen()}>⛶</button>
+      ) : null}
+      {zp.zoom > 1 ? (
+        <button className="zoom-btn" title={`zoomed to ${Math.round(zp.zoom * 100)}% — back to fit (pinch / ctrl+wheel zooms, drag or two-finger scroll pans)`} onClick={zp.reset}>
+          100%
+        </button>
+      ) : null}
       {peek && mode !== 'find' ? <PeekOverlay r={peek} /> : null}
     </div>
   );
@@ -180,6 +196,7 @@ const TopBar: React.FC = () => {
       <button disabled={!canUndo} onClick={() => store.doUndo()} title="Ctrl+Z">↶</button>
       <button disabled={!canRedo} onClick={() => store.doRedo()} title="Ctrl+Y">↷</button>
       <div className="modes" title="Tab switches stage">
+        <button className={mode === 'lyrics' ? 'on' : ''} onClick={() => store.set({ mode: 'lyrics' })} title="write the lyrics: structure, layers, AI, versions">Lyrics</button>
         <button className={mode === 'story' ? 'on' : ''} onClick={() => store.set({ mode: 'story' })}>Storyboard</button>
         <button className={mode === 'edit' ? 'on' : ''} onClick={() => store.set({ mode: 'edit' })}>Edit</button>
         <button className={mode === 'find' ? 'on' : ''} onClick={() => openFind()} title="full-screen footage search (F)">Find footage</button>
@@ -206,6 +223,7 @@ function useShortcuts() {
         return;
       }
       const s = store.state;
+      if (s.mode === 'lyrics') return; // the lyrics stage owns its keys
       const fps = s.project.fps;
       const player = (window as any).__player as PlayerRef | undefined;
       const tempo = new Tempo(s.project.tempo, s.audio?.meta.beats ?? [], s.project.duration);
@@ -215,6 +233,9 @@ function useShortcuts() {
       if (ctrl && k === 'z' && !e.shiftKey) { e.preventDefault(); store.doUndo(); return; }
       if (ctrl && (k === 'y' || (k === 'z' && e.shiftKey))) { e.preventDefault(); store.doRedo(); return; }
       if (ctrl && k === 's') { e.preventDefault(); store.save(); return; }
+      // keyframes: copy the dopesheet selection, paste at the playhead (onto the selected layer)
+      if (ctrl && k === 'c' && !e.shiftKey && s.keySel.length && !window.getSelection()?.toString()) { e.preventDefault(); copyKeys(s.keySel); return; }
+      if (ctrl && k === 'v' && !e.shiftKey && hasClipKeys()) { e.preventDefault(); pasteKeys(store.time); return; }
       const lw = s.sel.lyric;
       if (lw && lw.word !== undefined && e.altKey && (k === 'arrowleft' || k === 'arrowright')) {
         // nudge the selected word 10 ms (Shift: 50 ms), kept between its neighbours
@@ -301,6 +322,11 @@ function useShortcuts() {
         } else groupLayers(selectedLayerIds());
         return;
       }
+      if ((k === 'delete' || k === 'backspace') && s.keySel.length) {
+        // dopesheet keys win over the layer
+        deleteKeys(s.keySel);
+        return;
+      }
       if (k === 'delete' || k === 'backspace') {
         const ids = new Set(selectedLayerIds());
         if (ids.size) { store.edit((p) => { p.layers = p.layers.filter((l) => !ids.has(l.id)); pruneGroups(p); }); store.set({ sel: {} }); }
@@ -355,6 +381,7 @@ function useShortcuts() {
       if (k === 'escape') {
         if (s.peek) { store.set({ peek: null }); return; }
         // first Esc clears the selection, the next one leaves a focused group
+        if (s.keySel.length) { store.set({ keySel: [] }); return; }
         if (!Object.keys(s.sel).length && s.focusGroup) { store.set({ focusGroup: null }); return; }
         store.set({ sel: {} });
       }
@@ -397,6 +424,7 @@ export const App: React.FC = () => {
       <Timeline />
       {mode === 'find' ? <FindScreen /> : null}
       {mode === 'render' ? <RenderScreen /> : null}
+      {mode === 'lyrics' ? <LyricsScreen /> : null}
       <HoverPeek />
       <FootageMenu />
     </div>

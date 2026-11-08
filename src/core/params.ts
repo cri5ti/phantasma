@@ -17,6 +17,8 @@ export interface ParamDef {
   hint?: string;
   /** not keyframeable (e.g. text content, structural choices) */
   static?: boolean;
+  /** text param holding a media id: the inspector shows a media picker of this kind */
+  media?: 'image' | 'video' | 'any';
 }
 
 export interface EvalCtx {

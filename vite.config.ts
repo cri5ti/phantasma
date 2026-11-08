@@ -81,6 +81,31 @@ function api(): Plugin {
             fs.renameSync(PROJECT_FILE + '.tmp', PROJECT_FILE);
             return send(res, 200, { ok: true });
           }
+          if (url === '/api/scenes' && req.method === 'GET') {
+            // scene layers: GLSL files in <project>/scenes (any depth)
+            const dir = path.join(PROJECT, 'scenes');
+            const files: string[] = [];
+            const walk = (d: string) => {
+              if (!fs.existsSync(d)) return;
+              for (const e of fs.readdirSync(d, { withFileTypes: true })) {
+                if (e.isDirectory()) walk(path.join(d, e.name));
+                else if (/\.(frag|glsl)$/i.test(e.name)) files.push(path.relative(PROJECT, path.join(d, e.name)).split(path.sep).join('/'));
+              }
+            };
+            walk(dir);
+            return send(res, 200, { files: files.sort() });
+          }
+          if (url === '/api/scenes' && req.method === 'POST') {
+            const { name } = JSON.parse((await readBody(req)) || '{}');
+            const base = String(name ?? '').trim().replace(/\.(frag|glsl)$/i, '').replace(/[^\w-]+/g, '-').replace(/^-+|-+$/g, '');
+            if (!base) return send(res, 400, { error: 'scene name required' });
+            const rel = `scenes/${base}.frag`;
+            const file = path.join(PROJECT, rel);
+            if (fs.existsSync(file)) return send(res, 409, { error: `${rel} already exists` });
+            fs.mkdirSync(path.dirname(file), { recursive: true });
+            fs.writeFileSync(file, fs.readFileSync(path.join(ROOT, 'src', 'gen', 'scene-template.frag'), 'utf8').replace('@name Scene', `@name ${base}`));
+            return send(res, 200, { file: rel });
+          }
           if (url === '/api/media') {
             const f = path.join(WORK, 'media.json');
             return send(res, 200, fs.existsSync(f) ? JSON.parse(fs.readFileSync(f, 'utf8')) : { media: [] });

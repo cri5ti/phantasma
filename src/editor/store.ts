@@ -18,7 +18,14 @@ export interface Selection {
   groupId?: string;
 }
 
-export type Mode = 'edit' | 'story' | 'find' | 'render';
+/** a keyframe in the dopesheet: layer + param path ("p.<key>" | "m.<maskId>.<key>") + time */
+export interface KeyRef {
+  layer: string;
+  path: string;
+  t: number;
+}
+
+export type Mode = 'lyrics' | 'edit' | 'story' | 'find' | 'render';
 export type SideTab = 'brief' | 'shot' | 'board' | 'ai';
 
 export interface UIState {
@@ -61,6 +68,10 @@ export interface UIState {
   focusGroup: string | null;
   /** right-click menu on a footage thumbnail */
   footMenu: { x: number; y: number; ref: StockRef } | null;
+  /** layers expanded into dopesheet tracks */
+  dope: string[];
+  /** selected keyframes (dopesheet) */
+  keySel: KeyRef[];
 }
 
 type Listener = () => void;
@@ -97,7 +108,7 @@ class Store {
       canUndo: false,
       canRedo: false,
       taps: [],
-      mode: project.storyboard?.shots.length && !project.layers.some((l) => l.shot) ? 'story' : 'edit',
+      mode: !project.audio ? 'lyrics' : project.storyboard?.shots.length && !project.layers.some((l) => l.shot) ? 'story' : 'edit',
       sideTab: 'brief',
       sbOverlay: true,
       sbMotion: false,
@@ -107,6 +118,8 @@ class Store {
       peek: null,
       focusGroup: null,
       footMenu: null,
+      dope: [],
+      keySel: [],
     };
   }
 

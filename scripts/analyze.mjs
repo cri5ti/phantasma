@@ -6,4 +6,4 @@ import { projectDir, flag, findAudio, run, ROOT, WORK } from './lib.mjs';
 const dir = projectDir();
 const audio = flag('audio') || findAudio(dir);
 if (!audio) throw new Error(`No audio file found in ${dir}`);
-await run('python', [path.join(ROOT, 'analyze', 'analyze.py'), path.resolve(dir, audio), path.join(dir, WORK)].map((a) => `"${a}"`));
+await run('python', [path.join(ROOT, 'analyze', 'analyze.py'), path.resolve(dir, audio), path.join(dir, WORK)]);

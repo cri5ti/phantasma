@@ -49,6 +49,7 @@ export const ParamField: React.FC<Props> = ({ def, raw, onChange, mergeKey, laye
   const t = useTime();
   const autoKey = useStore((s) => s.autoKey);
   const audio = useStore((s) => s.audio);
+  const media = useStore((s) => s.media);
   const tempo = useTempo();
   const [modOpen, setModOpen] = useState(false);
   const animated = isAnimated(raw) && !!raw.$k?.length;
@@ -100,6 +101,18 @@ export const ParamField: React.FC<Props> = ({ def, raw, onChange, mergeKey, laye
       );
       break;
     case 'text':
+      if (def.media) {
+        const v = String(base);
+        const opts = media.filter((m) => def.media === 'any' || m.kind === def.media).map((m) => m.id);
+        if (v && !opts.includes(v)) opts.unshift(v);
+        control = (
+          <select value={v} onChange={(e) => set(e.target.value, true)}>
+            <option value="">— none —</option>
+            {opts.map((o) => <option key={o} value={o}>{o}</option>)}
+          </select>
+        );
+        break;
+      }
       control = <textarea rows={String(base).length > 30 ? 3 : 1} value={String(base)} onChange={(e) => set(e.target.value)} />;
       break;
   }
@@ -133,19 +146,17 @@ export const ParamField: React.FC<Props> = ({ def, raw, onChange, mergeKey, laye
           {def.type === 'number' ? (
             <button className={`mod ${mods.length ? 'on' : ''}`} title="audio / beat modulation" onClick={() => setModOpen(!modOpen)}>∿</button>
           ) : <span className="mod-spacer" />}
+          {k ? (
+            // tiny button; the (invisible) native select over it opens the easing list
+            <label className={`ease-btn ${(k.e ?? 'easeInOut') !== 'easeInOut' ? 'set' : ''}`} title={`ease → next key: ${k.e ?? 'easeInOut'}`}>
+              ⋯
+              <select value={k.e ?? 'easeInOut'} onChange={(e) => onChange(setKey(raw, t, k.v, e.target.value as Easing))}>
+                {EASINGS.map((x) => <option key={x}>{x}</option>)}
+              </select>
+            </label>
+          ) : <span className="ease-spacer" />}
         </div>
       ) : <div className="kf" />}
-      {k ? (
-        <div className="ease">
-          ease →
-          <select
-            value={k.e ?? 'easeInOut'}
-            onChange={(e) => onChange(setKey(raw, t, k.v, e.target.value as Easing))}
-          >
-            {EASINGS.map((x) => <option key={x}>{x}</option>)}
-          </select>
-        </div>
-      ) : null}
       {modOpen ? <ModEditor def={def} mods={mods} onChange={(m) => onChange(setMods(raw, m, base))} /> : null}
     </div>
   );

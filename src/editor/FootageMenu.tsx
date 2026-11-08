@@ -83,7 +83,7 @@ export const FootageMenu: React.FC = () => {
   const left = Math.min(m.x, window.innerWidth - 290), top = Math.max(8, Math.min(m.y, window.innerHeight - 470));
 
   return (
-    <div className="popover ctxmenu footmenu" ref={ref} style={{ left, top }} onContextMenu={(e) => e.preventDefault()}>
+    <div className="popover ctxmenu footmenu" ref={ref} style={{ left, top, maxHeight: window.innerHeight - top - 8 }} onContextMenu={(e) => e.preventDefault()}>
       <div className="cat">{r.provider === 'local' ? `footage ${r.id}` : `${r.provider} ${r.id}`} → idea board</div>
       <textarea rows={2} value={note} autoFocus placeholder="note (optional) — e.g. “great light leak for the bridge”" onChange={(e) => setNote(e.target.value)} />
       <input value={tags} placeholder="tags, comma separated" onChange={(e) => setTags(e.target.value)} />

@@ -1,16 +1,20 @@
 import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import { allKeyTimes, isAnimated, shiftKeys } from '../core/params';
+import { allKeyTimes, EASINGS, isAnimated, shiftKeys } from '../core/params';
 import { pickOf } from '../core/storyboard';
 import type { Tempo } from '../core/tempo';
-import type { Cue, Group, Layer, LyricLine, MediaItem, ParamMap, Shot } from '../core/types';
+import type { Cue, Easing, Group, Layer, LyricLine, MediaItem, ParamMap, Shot } from '../core/types';
 import { getGen } from '../gen/registry';
 import { AddMenu } from './AddMenu';
+import { deleteKeys, duplicateKeys, layerTracks, moveKeys, sameKey, setEase, toggleDope, type Track } from './dopesheet';
+import { useDismiss } from './useDismiss';
+
+const IS_MAC = /Mac|iPhone|iPad/.test(navigator.platform);
 import { applyToShot } from './Board';
 import { addCue, moveCue, removeCue, renameCue } from './lyricsActions';
 import { editGroup, groupLayers, groupOf, groupSpan, selectedLayerIds, setMembersEnabled, shiftGroup, ungroup } from './groups';
 import { VResize } from './Resizer';
 import { refThumb } from './StoryPanel';
-import { fmtTime, store, useStore, useTempo } from './store';
+import { fmtTime, store, useStore, useTempo, type KeyRef } from './store';
 
 /** Seconds of real footage a video layer has on the timeline (clip length after the in-point, at its speed); null when unknown or not a video. */
 function footageLen(l: Layer, media: MediaItem[]): number | null {
@@ -25,10 +29,11 @@ const loops = (l: Layer) => l.params.loop !== false;
 
 const HEAD_W = 210;
 const RULER_H = 22;
-const TEMPO_H = 26;
-const WAVE_H = 46;
-const TOP_H = RULER_H + TEMPO_H + WAVE_H;
+const TEMPO_H0 = 26;
+const WAVE_H0 = 46;
 const ROW_H = 30;
+/** dopesheet track row */
+const SUB_H = 20;
 const STORY_H = 56;
 const LYR_LINE_H = 24;
 const LYR_WORD_H = 26;
@@ -36,7 +41,7 @@ const CUE_COLOR = '#4dd4ff';
 const NO_CUES: Cue[] = [];
 const NO_GROUPS: Group[] = [];
 
-const KIND_COLORS: Record<string, string> = { video: '#3b6ea8', image: '#3b8a8a', visualizer: '#8a4fd0', shader: '#c0508a', shape: '#7a7a3a', text: '#b07a2a', fill: '#555', particles: '#2f8a6a' };
+const KIND_COLORS: Record<string, string> = { video: '#3b6ea8', image: '#3b8a8a', visualizer: '#8a4fd0', shader: '#c0508a', shape: '#7a7a3a', text: '#b07a2a', fill: '#555', particles: '#2f8a6a', scene: '#b0603a' };
 
 function layerColor(l: Layer) {
   if (l.color) return l.color;
@@ -105,6 +110,19 @@ export const Timeline: React.FC = () => {
   const tempo = useTempo();
   tempoRef = tempo;
 
+  // small ticks in the ruler header hide the tempo map / audio / storyboard layers for more room
+  const [hid, setHid] = useState<{ tempo?: boolean; audio?: boolean; story?: boolean }>(() => {
+    try { return JSON.parse(localStorage.getItem('mvgen.tl.hidden') ?? '{}'); } catch { return {}; }
+  });
+  const flip = (k: 'tempo' | 'audio' | 'story') => setHid((h) => {
+    const n = { ...h, [k]: !h[k] };
+    try { localStorage.setItem('mvgen.tl.hidden', JSON.stringify(n)); } catch { /* ignore */ }
+    return n;
+  });
+  const TEMPO_H = hid.tempo ? 0 : TEMPO_H0;
+  const WAVE_H = hid.audio ? 0 : WAVE_H0;
+  const TOP_H = RULER_H + TEMPO_H + WAVE_H;
+
   const mainRef = useRef<HTMLDivElement>(null);
   const topRef = useRef<HTMLCanvasElement>(null);
   const gridRef = useRef<HTMLCanvasElement>(null);
@@ -122,7 +140,21 @@ export const Timeline: React.FC = () => {
     [project.layers, focus, memberOf],
   );
   const GTOP = groupRows * ROW_H;
-  const lanesH = Math.max(GTOP + layersTopDown.length * ROW_H, 120);
+  const dope = useStore((s) => s.dope);
+  const keySel = useStore((s) => s.keySel);
+  // rows top-down: a layer row, plus one track row per keyframed param when expanded (dopesheet)
+  const rows = useMemo(() => {
+    let y = GTOP;
+    return layersTopDown.map((l) => {
+      const open = dope.includes(l.id);
+      const tracks = open ? layerTracks(l) : [];
+      const n = open ? Math.max(1, tracks.length) : 0; // an empty expanded layer gets one hint row
+      const r = { l, top: y, open, tracks, h: ROW_H + n * SUB_H };
+      y += r.h;
+      return r;
+    });
+  }, [layersTopDown, dope, GTOP]);
+  const lanesH = Math.max(rows.length ? rows[rows.length - 1].top + rows[rows.length - 1].h : GTOP, 120);
   const isSelLayer = (id: string) => sel.layerId === id || !!sel.layerIds?.includes(id);
 
   useLayoutEffect(() => {
@@ -204,7 +236,7 @@ export const Timeline: React.FC = () => {
 
     // tempo sections
     const ty = RULER_H;
-    project.tempo.forEach((s, i) => {
+    if (TEMPO_H) project.tempo.forEach((s, i) => {
       const a = X(s.start), b = X(s.end);
       if (b < 0 || a > width) return;
       ctx.fillStyle = s.color ?? '#5b8cff';
@@ -218,7 +250,7 @@ export const Timeline: React.FC = () => {
       ctx.fillText(`${s.label}  ${s.bpm.toFixed(1)}`, Math.max(a, 0) + 4, ty + 17);
       ctx.restore();
     });
-    if (!project.tempo.length) {
+    if (TEMPO_H && !project.tempo.length) {
       ctx.fillStyle = fg;
       ctx.font = '11px system-ui';
       ctx.fillText('no tempo map — using detected beats (Seed from analysis in the toolbar)', 6, ty + 17);
@@ -228,7 +260,7 @@ export const Timeline: React.FC = () => {
     const wy = RULER_H + TEMPO_H;
     ctx.fillStyle = cssVar('--bg-1');
     ctx.fillRect(0, wy, width, WAVE_H);
-    if (audio) {
+    if (audio && WAVE_H) {
       const mid = wy + WAVE_H / 2;
       for (const [name, color, scale] of [['rms', cssVar('--wave'), 1], ['bass', cssVar('--wave-bass'), 0.6]] as const) {
         ctx.fillStyle = color;
@@ -242,7 +274,7 @@ export const Timeline: React.FC = () => {
         }
       }
     }
-  }, [width, zoom, scroll, project.tempo, project.markers, project.cues, project.duration, audio, sel.section, inP, outP, loopOn]);
+  }, [width, zoom, scroll, project.tempo, project.markers, project.cues, project.duration, audio, sel.section, inP, outP, loopOn, TEMPO_H, WAVE_H]);
 
   // ---- lanes background: beat grid ---------------------------------------------
   useEffect(() => {
@@ -278,9 +310,20 @@ export const Timeline: React.FC = () => {
       ctx.fillStyle = 'rgba(255,255,255,0.025)';
       ctx.fillRect(0, 0, width, GTOP);
     }
-    for (let i = 1; i <= groupRows + layersTopDown.length; i++) {
+    ctx.fillStyle = cssVar('--line');
+    for (let i = 1; i <= groupRows; i++) ctx.fillRect(0, i * ROW_H - 1, width, i === groupRows ? 2 : 1);
+    for (const r of rows) {
+      if (r.open) {
+        // dopesheet tracks: slightly darker band + faint separators
+        ctx.fillStyle = 'rgba(0,0,0,0.18)';
+        ctx.fillRect(0, r.top + ROW_H, width, r.h - ROW_H);
+        ctx.fillStyle = cssVar('--line');
+        ctx.globalAlpha = 0.45;
+        for (let k = 1; k < (r.h - ROW_H) / SUB_H; k++) ctx.fillRect(0, r.top + ROW_H + k * SUB_H - 1, width, 1);
+        ctx.globalAlpha = 1;
+      }
       ctx.fillStyle = cssVar('--line');
-      ctx.fillRect(0, i * ROW_H - 1, width, i === groupRows ? 2 : 1);
+      ctx.fillRect(0, r.top + r.h - 1, width, 1);
     }
     if (inP !== null || outP !== null) {
       const a = X(inP ?? 0), b = X(outP ?? project.duration);
@@ -300,7 +343,7 @@ export const Timeline: React.FC = () => {
     });
     ctx.setLineDash([]);
     ctx.globalAlpha = 1;
-  }, [width, zoom, scroll, tempo, lanesH, layersTopDown.length, groupRows, project.tempo, project.cues, inP, outP, loopOn, project.duration]);
+  }, [width, zoom, scroll, tempo, lanesH, rows, groupRows, project.tempo, project.cues, inP, outP, loopOn, project.duration]);
 
   // ---- focus a group: zoom to it (and back when leaving) -----------------------------
   const preFocus = useRef<{ zoom: number; scroll: number } | null>(null);
@@ -338,7 +381,7 @@ export const Timeline: React.FC = () => {
     const onWheel = (e: WheelEvent) => {
       const s = store.state;
       const rect = mainRef.current!.getBoundingClientRect();
-      if (e.clientX < rect.left) return;
+      if (e.clientX < rect.left || (e.target as HTMLElement).closest?.('.popover')) return;
       if (e.ctrlKey || e.metaKey) {
         e.preventDefault();
         const mx = e.clientX - rect.left;
@@ -541,22 +584,31 @@ export const Timeline: React.FC = () => {
     store.seek(kt);
     const sx = e.clientX;
     let last = kt;
+    // alt-drag: duplicate every key at this time (copies stay behind); snapping stays on
+    const dup = e.altKey;
+    let copied = false;
+    const merge = `key-${l.id}-${kt}-${Date.now()}`;
     const move = (ev: MouseEvent) => {
-      const nt = +snap(kt + (ev.clientX - sx) / zoom, l.id, ev.altKey).toFixed(4);
+      const nt = +snap(kt + (ev.clientX - sx) / zoom, l.id, ev.altKey && !dup).toFixed(4);
       if (nt === last) return;
       const from = last;
       last = nt;
+      const first = dup && !copied;
+      copied = true;
       store.edit((p) => {
         const x = p.layers.find((y) => y.id === l.id)!;
         const moveKeys = (m: ParamMap) => {
           for (const v of Object.values(m)) if (isAnimated(v) && v.$k) {
-            v.$k.forEach((k) => { if (Math.abs(k.t - from) < 1e-3) k.t = nt; });
+            const k = v.$k.find((k) => Math.abs(k.t - from) < 1e-3);
+            if (!k) continue;
+            if (first) v.$k.push({ ...k });
+            k.t = nt;
             v.$k.sort((a, b) => a.t - b.t);
           }
         };
         moveKeys(x.params as ParamMap);
         x.masks.forEach((m) => moveKeys(m.params as ParamMap));
-      }, `key-${l.id}-${kt}`);
+      }, merge);
       store.seek(nt);
     };
     const up = () => { window.removeEventListener('mousemove', move); window.removeEventListener('mouseup', up); };
@@ -567,8 +619,90 @@ export const Timeline: React.FC = () => {
   const onLaneDown = (e: React.MouseEvent) => {
     if (e.button !== 0) return;
     const rect = mainRef.current!.getBoundingClientRect();
-    store.set({ sel: {} });
+    store.set({ sel: {}, keySel: [] });
     store.seek(snap(T(e.clientX - rect.left), undefined, e.altKey));
+  };
+
+  // ---- dopesheet: pick / drag keys, box-select on the tracks, right-click menu ------------------------------------
+  const [box, setBox] = useState<{ x0: number; y0: number; x1: number; y1: number } | null>(null);
+  const [keyMenu, setKeyMenu] = useState<{ x: number; y: number } | null>(null);
+  const liveSel = () => store.state.keySel.filter((k) => store.state.project.layers.some((x) => x.id === k.layer));
+
+  const onDKeyDown = (e: React.MouseEvent, l: Layer, tr: Track, kt: number) => {
+    if (e.button !== 0) return;
+    e.stopPropagation();
+    e.preventDefault();
+    if (IS_MAC && e.ctrlKey) return; // ctrl-click is a right-click on macOS: the context menu handles it
+    const ref: KeyRef = { layer: l.id, path: tr.path, t: kt };
+    let selKeys = liveSel();
+    if (e.shiftKey || e.ctrlKey || e.metaKey) {
+      selKeys = selKeys.some((k) => sameKey(k, ref)) ? selKeys.filter((k) => !sameKey(k, ref)) : [...selKeys, ref];
+      store.set({ keySel: selKeys, sel: { layerId: l.id } });
+      return;
+    }
+    if (!selKeys.some((k) => sameKey(k, ref))) selKeys = [ref];
+    store.set({ keySel: selKeys, sel: { layerId: l.id } });
+    const from = selKeys.map((k) => k.t);
+    let cur = selKeys;
+    let moved = false;
+    const sx = e.clientX;
+    const merge = `dkeys-${Date.now()}`;
+    // alt-drag: duplicate (a copy stays behind). Alt is taken, so snapping stays on for this drag.
+    const dup = e.altKey;
+    const move = (ev: MouseEvent) => {
+      if (!moved && Math.abs(ev.clientX - sx) < 3) return;
+      if (!moved && dup) duplicateKeys(cur, merge);
+      moved = true;
+      const raw = kt + (ev.clientX - sx) / store.state.zoom;
+      // snap the grabbed key (not to the playhead: it doesn't follow during the drag)
+      const tgt = Math.max(0, snap(raw, undefined, ev.altKey && !dup));
+      cur = moveKeys(cur, from, tgt - kt, merge);
+      store.set({ keySel: cur });
+    };
+    const up = () => {
+      window.removeEventListener('mousemove', move);
+      window.removeEventListener('mouseup', up);
+      const k = cur.find((x) => x.layer === ref.layer && x.path === ref.path);
+      store.seek(k ? k.t : kt);
+    };
+    window.addEventListener('mousemove', move);
+    window.addEventListener('mouseup', up);
+  };
+
+  const onTrackDown = (e: React.MouseEvent) => {
+    if (e.button !== 0) return;
+    e.stopPropagation();
+    const lane = (e.currentTarget as HTMLElement).closest('.tl-lanes')!.getBoundingClientRect();
+    const x0 = e.clientX - lane.left, y0 = e.clientY - lane.top;
+    const add = e.shiftKey || e.ctrlKey || e.metaKey;
+    let b = { x0, y0, x1: x0, y1: y0 };
+    const move = (ev: MouseEvent) => {
+      b = { x0, y0, x1: ev.clientX - lane.left, y1: ev.clientY - lane.top };
+      setBox(b);
+    };
+    const up = (ev: MouseEvent) => {
+      window.removeEventListener('mousemove', move);
+      window.removeEventListener('mouseup', up);
+      setBox(null);
+      if (Math.abs(b.x1 - b.x0) < 3 && Math.abs(b.y1 - b.y0) < 3) {
+        // a click on an empty track: like the lanes — deselect keys + seek
+        if (!add) store.set({ keySel: [] });
+        store.seek(snap(T(x0), undefined, ev.altKey));
+        return;
+      }
+      const [xa, xb] = [Math.min(b.x0, b.x1), Math.max(b.x0, b.x1)];
+      const [ya, yb] = [Math.min(b.y0, b.y1), Math.max(b.y0, b.y1)];
+      const hits: KeyRef[] = [];
+      for (const r of rows) r.tracks.forEach((tr, i) => {
+        const cy = r.top + ROW_H + i * SUB_H + SUB_H / 2;
+        if (cy < ya || cy > yb) return;
+        for (const k of tr.keys) if (X(k.t) >= xa && X(k.t) <= xb) hits.push({ layer: r.l.id, path: tr.path, t: k.t });
+      });
+      const base = add ? liveSel().filter((k) => !hits.some((h) => sameKey(h, k))) : [];
+      store.set({ keySel: [...base, ...hits], ...(hits[0] ? { sel: { layerId: hits[0].layer } } : {}) });
+    };
+    window.addEventListener('mousemove', move);
+    window.addEventListener('mouseup', up);
   };
 
   // ---- reorder via heads -----------------------------------------------------------------
@@ -632,18 +766,23 @@ export const Timeline: React.FC = () => {
       </div>
       <div className="tl-top">
         <div className="tl-heads-top" style={{ width: HEAD_W }}>
-          <div style={{ height: RULER_H }} />
-          <div className="rowlabel" style={{ height: TEMPO_H }}>Tempo map</div>
-          <div className="rowlabel" style={{ height: WAVE_H }}>Audio</div>
+          <div className="layer-ticks" style={{ height: RULER_H }}>
+            {([['tempo', 'Tempo map'], ['audio', 'Audio'], ['story', 'Storyboard']] as const).map(([k, name]) => (
+              <button key={k} className={hid[k] ? 'off' : ''} title={`${hid[k] ? 'show' : 'hide'} ${name}`} onClick={() => flip(k)}>{name[0]}</button>
+            ))}
+          </div>
+          {TEMPO_H ? <div className="rowlabel" style={{ height: TEMPO_H }}>Tempo map</div> : null}
+          {WAVE_H ? <div className="rowlabel" style={{ height: WAVE_H }}>Audio</div> : null}
         </div>
         <div className="tl-canvas-wrap" ref={mainRef}>
           <canvas ref={topRef} style={{ width, height: TOP_H, display: 'block' }} onMouseDown={onTopDown} onMouseMove={onTopMove} />
           <div className="playhead" ref={playheadRefs[0]} style={{ height: TOP_H }} />
         </div>
       </div>
-      {shots?.length || mode === 'story' ? <StoryLane shots={shots ?? []} width={width} zoom={zoom} scroll={scroll} selId={sel.shotId} /> : <div />}
+      {!hid.story && (shots?.length || mode === 'story') ? <StoryLane shots={shots ?? []} width={width} zoom={zoom} scroll={scroll} selId={sel.shotId} /> : <div />}
       {project.lyrics?.lines.length ? <LyricsLane lines={project.lyrics.lines} width={width} zoom={zoom} scroll={scroll} sel={sel.lyric} /> : <div />}
       {ctxMenu ? <TimelineMenu {...ctxMenu} zoom={zoom} close={() => setCtxMenu(null)} /> : null}
+      {keyMenu ? <KeyMenu {...keyMenu} close={() => setKeyMenu(null)} /> : null}
       <div className="tl-scroll">
         <div className="tl-rows" style={{ height: lanesH }}>
           <div className="tl-heads" ref={headRef} style={{ width: HEAD_W }}>
@@ -653,9 +792,9 @@ export const Timeline: React.FC = () => {
                 <span className="lblend">{groups.filter((g) => (g.row ?? 0) === r).length}</span>
               </div>
             ))}
-            {layersTopDown.map((l) => (
+            {rows.map(({ l, open, tracks }) => (
+              <React.Fragment key={l.id}>
               <div
-                key={l.id}
                 className={`head ${isSelLayer(l.id) ? 'sel' : ''} ${l.enabled ? '' : 'off'}`}
                 style={{ height: ROW_H, borderLeftColor: layerColor(l) }}
                 draggable
@@ -664,12 +803,24 @@ export const Timeline: React.FC = () => {
                 onDrop={() => dropOn(l.id)}
                 onClick={(e) => ((e.ctrlKey || e.metaKey || e.shiftKey) ? toggleLayerSel(l.id) : store.set({ sel: { layerId: l.id } }))}
               >
+                <button className={`ico dtog ${open ? 'open' : ''} ${layerHasKeys(l) ? 'has' : ''}`} title={open ? 'collapse keyframe tracks' : 'expand keyframe tracks (dopesheet)'} onClick={(e) => { e.stopPropagation(); toggleDope(l.id); }}>{open ? '▾' : '▸'}</button>
                 <button className={`ico ${l.enabled ? 'on' : ''}`} title="visible" onClick={(e) => { e.stopPropagation(); toggle(l.id, 'enabled'); }}>{l.enabled ? '●' : '○'}</button>
                 <button className={`ico ${l.solo ? 'solo' : ''}`} title="solo" onClick={(e) => { e.stopPropagation(); toggle(l.id, 'solo'); }}>S</button>
                 {memberOf.get(l.id) ? <span className="gdot" style={{ background: memberOf.get(l.id)!.color }} title={`in group “${memberOf.get(l.id)!.name}”`} /> : null}
                 <span className="lname" title={l.name}>{l.name}</span>
                 <span className="lblend">{l.blend !== 'normal' ? l.blend : ''}{l.clipBelow ? ' ⤓' : ''}{l.masks.length ? ` ◐${l.masks.length}` : ''}</span>
               </div>
+              {open && !tracks.length ? <div className="head dhead empty" style={{ height: SUB_H }}>no keyframes — ◆ in the Inspector</div> : null}
+              {tracks.map((tr) => (
+                <div key={tr.path} className="head dhead" style={{ height: SUB_H }} title={`${tr.group} › ${tr.label} · ${tr.keys.length} keys\nclick = select all its keys`}
+                  onClick={(e) => {
+                    const ks = tr.keys.map((k) => ({ layer: l.id, path: tr.path, t: k.t }));
+                    store.set({ keySel: e.shiftKey || e.ctrlKey || e.metaKey ? [...liveSel(), ...ks] : ks, sel: { layerId: l.id } });
+                  }}>
+                  <span className="dgroup">{tr.group}</span><span className="lname">{tr.label}</span><span className="dcount">{tr.keys.length}</span>
+                </div>
+              ))}
+              </React.Fragment>
             ))}
           </div>
           <div className="tl-lanes" style={{ width, height: lanesH }} onMouseDown={onLaneDown}>
@@ -690,20 +841,50 @@ export const Timeline: React.FC = () => {
                 </div>
               );
             })}
-            {layersTopDown.map((l, row) => {
+            {rows.map(({ l, top, open, tracks }) => (
+              <React.Fragment key={`d${l.id}`}>
+                {open ? tracks.map((tr, i) => (
+                  <div key={tr.path} className="dtrack" style={{ top: top + ROW_H + i * SUB_H, height: SUB_H, width }} onMouseDown={onTrackDown}>
+                    {tr.keys.map((k, j) => {
+                      const x = X(k.t);
+                      if (x < -10 || x > width + 10) return null;
+                      const ref = { layer: l.id, path: tr.path, t: k.t };
+                      const on = keySel.some((s) => sameKey(s, ref));
+                      const next = tr.keys[j + 1];
+                      return (
+                        <React.Fragment key={k.t}>
+                          {next && k.e !== 'hold' && typeof k.v === 'number' && k.v !== next.v ? <div className="dspan" style={{ left: x, width: X(next.t) - x }} /> : null}
+                          <div className={`dkey e-${k.e ?? 'easeInOut'} ${on ? 'on' : ''}`} style={{ left: x - 6 }}
+                            onMouseDown={(e) => onDKeyDown(e, l, tr, k.t)}
+                            onContextMenu={(e) => {
+                              e.preventDefault();
+                              e.stopPropagation();
+                              if (!on) store.set({ keySel: [ref], sel: { layerId: l.id } });
+                              setKeyMenu({ x: e.clientX, y: e.clientY });
+                            }}
+                            title={`${tr.label} @ ${fmtTime(k.t)} = ${typeof k.v === 'number' ? +k.v.toFixed(4) : k.v}\nease → ${k.e ?? 'easeInOut'}\ndrag = move · alt-drag = duplicate · shift/ctrl = add · ${IS_MAC ? 'ctrl/right' : 'right'}-click = ease / delete · ${IS_MAC ? '⌘' : 'ctrl'}+C / V = copy / paste at playhead`} />
+                        </React.Fragment>
+                      );
+                    })}
+                  </div>
+                )) : null}
+              </React.Fragment>
+            ))}
+            {box ? <div className="dbox" style={{ left: Math.min(box.x0, box.x1), top: Math.min(box.y0, box.y1), width: Math.abs(box.x1 - box.x0), height: Math.abs(box.y1 - box.y0) }} /> : null}
+            {rows.map(({ l, top, open }) => {
               if (!visible(l)) return null;
               const a = X(l.start), b = X(l.end);
               const isSel = isSelLayer(l.id);
               const gm = memberOf.get(l.id);
               const fl = footageLen(l, localMedia);
               const beyond = fl !== null && l.end - l.start > fl + 0.02;
-              const keys = isSel ? [...new Set([...allKeyTimes(l.params), ...l.masks.flatMap((m) => allKeyTimes(m.params))])] : [];
+              const keys = isSel || open ? [...new Set([...allKeyTimes(l.params), ...l.masks.flatMap((m) => allKeyTimes(m.params))])] : [];
               return (
                 <div
                   key={l.id}
                   data-layer={l.id}
                   className={`clip ${isSel ? 'sel' : ''} ${l.enabled ? '' : 'off'}`}
-                  style={{ left: a, width: Math.max(4, b - a), top: GTOP + row * ROW_H + 3, height: ROW_H - 7, background: layerColor(l), boxShadow: gm && !isSel ? `inset 0 -2px 0 ${gm.color}` : undefined }}
+                  style={{ left: a, width: Math.max(4, b - a), top: top + 3, height: ROW_H - 7, background: layerColor(l), boxShadow: gm && !isSel ? `inset 0 -2px 0 ${gm.color}` : undefined }}
                   onMouseDown={(e) => onClipDown(e, l, 'move')}
                   title={`${l.name}  ${fmtTime(l.start)} → ${fmtTime(l.end)}${fl !== null ? `
 footage ${fl.toFixed(2)} s${beyond ? (loops(l) ? ' - loops after the dashed line' : ' - no footage after the dashed line (loop is off)') : ''}` : ''}`}
@@ -715,7 +896,7 @@ footage ${fl.toFixed(2)} s${beyond ? (loops(l) ? ' - loops after the dashed line
                   {beyond && loops(l) ? Array.from({ length: Math.min(40, Math.ceil((l.end - l.start) / fl!) - 1) }, (_, i) => i + 2).filter((n) => n * fl! < l.end - l.start - 0.02).map((n) => <div key={n} className="loopmark" style={{ left: n * fl! * zoom }} />) : null}
                   <span className="clabel">{l.media && streamedIds.has(l.media) ? '☁ ' : ''}{l.name}</span>
                   {keys.map((kt) => (
-                    <div key={kt} className="key" style={{ left: (kt - l.start) * zoom - 5 }} onMouseDown={(e) => onKeyDown(e, l, kt)} title={`key @ ${fmtTime(kt)}`} />
+                    <div key={kt} className="key" style={{ left: (kt - l.start) * zoom - 5 }} onMouseDown={(e) => onKeyDown(e, l, kt)} title={`key @ ${fmtTime(kt)}\ndrag = move · alt-drag = duplicate`} />
                   ))}
                   <div className="grip r" onMouseDown={(e) => onClipDown(e, l, 'r')} />
                 </div>
@@ -725,6 +906,24 @@ footage ${fl.toFixed(2)} s${beyond ? (loops(l) ? ' - loops after the dashed line
           </div>
         </div>
       </div>
+    </div>
+  );
+};
+
+const layerHasKeys = (l: Layer) => allKeyTimes(l.params).length > 0 || l.masks.some((m) => allKeyTimes(m.params).length > 0);
+
+/** right-click on a dopesheet key: easing for the selected keys, delete */
+const KeyMenu: React.FC<{ x: number; y: number; close: () => void }> = ({ x, y, close }) => {
+  const ref = useRef<HTMLDivElement>(null);
+  const keySel = useStore((s) => s.keySel);
+  useDismiss(ref, close);
+  const act = (fn: () => void) => () => { fn(); close(); };
+  return (
+    <div className="popover ctxmenu keymenu" ref={ref} style={{ left: Math.min(x, window.innerWidth - 250), top: Math.max(8, Math.min(y, window.innerHeight - 280)) }} onContextMenu={(e) => e.preventDefault()}>
+      <div className="cat">{keySel.length} key{keySel.length === 1 ? '' : 's'} · ease to the next key</div>
+      {EASINGS.map((e) => <button key={e} onClick={act(() => setEase(keySel, e as Easing))}>{e}</button>)}
+      <div className="sep" />
+      <button className="danger" onClick={act(() => deleteKeys(keySel))}>Delete <i>Del</i></button>
     </div>
   );
 };
@@ -877,14 +1076,7 @@ const TimelineMenu: React.FC<{ x: number; y: number; t: number; zoom: number; cl
   const cues = useStore((s) => s.project.cues) ?? NO_CUES;
   const near = cues.filter((c) => Math.abs(c.t - t) * zoom < 6).sort((a, b) => Math.abs(a.t - t) - Math.abs(b.t - t))[0] as Cue | undefined;
   const [label, setLabel] = useState(near?.label ?? '');
-  useEffect(() => {
-    const h = (e: MouseEvent) => !ref.current?.contains(e.target as Node) && close();
-    const k = (e: KeyboardEvent) => e.key === 'Escape' && close();
-    window.addEventListener('mousedown', h);
-    window.addEventListener('keydown', k);
-    window.addEventListener('wheel', close, { passive: true });
-    return () => { window.removeEventListener('mousedown', h); window.removeEventListener('keydown', k); window.removeEventListener('wheel', close); };
-  }, []);
+  useDismiss(ref, close);
   const tempo = tempoRef;
   const beat = tempo ? tempo.beatsBetween(t - 2, t + 2).sort((a, b) => Math.abs(a.t - t) - Math.abs(b.t - t))[0]?.t : undefined;
   const ph = store.time;
@@ -893,7 +1085,7 @@ const TimelineMenu: React.FC<{ x: number; y: number; t: number; zoom: number; cl
   // keep the menu on screen
   const left = Math.min(x, window.innerWidth - 250), top = Math.max(8, Math.min(y, window.innerHeight - (near ? 440 : 330)));
   return (
-    <div className="popover ctxmenu" ref={ref} style={{ left, top }} onContextMenu={(e) => e.preventDefault()}>
+    <div className="popover ctxmenu" ref={ref} style={{ left, top, maxHeight: window.innerHeight - top - 8 }} onContextMenu={(e) => e.preventDefault()}>
       <GroupItems target={target} act={act} />
       <div className="cat">Loop</div>
       {span ? (

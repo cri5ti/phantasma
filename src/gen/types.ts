@@ -21,7 +21,7 @@ export interface FrameCtx {
   lyrics?: Lyrics;
 }
 
-export type GenCategory = 'visualizer' | 'shader' | 'shape' | 'text' | 'fill' | 'particles';
+export type GenCategory = 'visualizer' | 'shader' | 'shape' | 'text' | 'fill' | 'particles' | 'scene';
 
 export interface GenDef {
   id: string;

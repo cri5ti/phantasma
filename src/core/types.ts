@@ -122,6 +122,8 @@ export interface Project {
   storyboard?: Storyboard;
   /** word-timed lyrics for timeline syncing */
   lyrics?: Lyrics;
+  /** lyric sheet (writing stage): structure in bars, lyrics, arrangement layers, tags */
+  sheet?: LyricSheet;
   /** precise sync points (right-click the timeline) */
   cues?: Cue[];
   /** timeline organisation: layer groups on group rows (focus = timeline filter, compositing unchanged) */
@@ -161,6 +163,117 @@ export interface LyricLine {
   id: string;
   section?: string;
   words: LyricWord[];
+  /** the lyric-sheet line this timed line came from (alignment of the sheet to the song) */
+  sheet?: { block: string; line: string };
+}
+
+// ---- lyric sheet (writing stage) ------------------------------------------------------------------
+// Positions are in beats from the song start; seconds come from the sheet tempo (bpm + overrides).
+
+export type BlockKind = 'intro' | 'verse' | 'prechorus' | 'chorus' | 'bridge' | 'outro' | 'break' | 'hook' | 'drop' | 'custom';
+
+export interface SheetLine {
+  id: string;
+  /** raw text incl. inline directions: "[whisper] hold me close (ooh)" */
+  text: string;
+  /** planned length in beats; undefined = share the block's remaining beats evenly */
+  beats?: number;
+}
+
+export interface SheetBlock {
+  id: string;
+  kind: BlockKind;
+  name: string;
+  /** start / length in beats */
+  at: number;
+  len: number;
+  lines: SheetLine[];
+  /** linked repeats: blocks with the same link id share their lines (kept in sync) */
+  link?: string;
+  color?: string;
+  /** target shape per line (from a reference lyric or a template): syllables, rhyme letters, stress */
+  shape?: BlockShape;
+}
+
+export interface BlockShape {
+  syl: number[];
+  /** rhyme letters per line, e.g. "AABB" */
+  rhyme?: string;
+  stress?: string[];
+  /** where it came from, e.g. "reference: Verse 1" */
+  from?: string;
+}
+
+/** optional per-section-kind targets the findings check against */
+export interface SectionTarget {
+  /** syllables per beat, per line */
+  maxDensity?: number;
+  /** share of repeated lines, 0..1 */
+  minRepetition?: number;
+  /** line endings should be open, sustainable vowels */
+  openEnds?: boolean;
+}
+
+/** findings settings: rules switched on/off and thresholds (missing = the rule's default) */
+export interface LintOpts {
+  rules?: Record<string, { on?: boolean; th?: number }>;
+  /** proposals that break a line's syllable count are rejected (the AI must retry) */
+  strict?: boolean;
+}
+
+export interface TempoSpan { id: string; at: number; len: number; bpm: number }
+
+export interface SheetSpan { id: string; at: number; len: number; labels: string[] }
+
+export interface SheetTrack {
+  id: string;
+  name: string;
+  /** channel: one label, spans = on/off · mixed: each span carries a label set · energy: a 0..1 curve */
+  kind: 'channel' | 'mixed' | 'energy';
+  label?: string;
+  spans: SheetSpan[];
+  points?: { at: number; v: number }[];
+}
+
+export interface SheetLabel { id: string; name: string; color: string; group?: 'voice' | 'instrument' | 'dynamics' | 'mood' | 'fx' }
+
+export interface WordTag {
+  id: string;
+  line: string;
+  /** char offsets into the line text */
+  from: number;
+  to: number;
+  kind: 'replace' | 'keep' | 'note';
+  /** custom annotation label (kind note) */
+  label?: string;
+  note?: string;
+}
+
+export interface LyricSheet {
+  /** global style prompt: genre, voice, mood, production — the generator's style field and AI context */
+  style: string;
+  bpm: number;
+  beatsPerBar: number;
+  /** seconds at beat 0 (≤ 0 when the song's first downbeat comes after a pickup) */
+  offset?: number;
+  /** BPM layer: overrides of the base bpm over beat ranges */
+  tempo: TempoSpan[];
+  blocks: SheetBlock[];
+  tracks: SheetTrack[];
+  labels: SheetLabel[];
+  tags: WordTag[];
+  /** target song length (s) */
+  target?: number;
+  /** tempo taken from the song analysis (aligned to a produced song) */
+  songTempo?: boolean;
+  /** library version this working copy was loaded from / last saved as */
+  version?: { id: string; name: string };
+  /** findings settings */
+  lint?: LintOpts;
+  /** targets per section kind */
+  targets?: Partial<Record<BlockKind, SectionTarget>>;
+  /** export settings */
+  exportOpts?: { layers: 'header' | 'line' | 'off'; gaps: boolean; energy: boolean; styleLimit: number; lyricsLimit: number };
 }
 
 export interface Lyrics {

@@ -1,8 +1,9 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { newGenLayer, newMediaLayer } from '../core/project';
 import { mediaRef } from '../core/storyboard';
 import type { Layer, MediaItem } from '../core/types';
-import { GENERATORS } from '../gen/registry';
+import { getGen, GENERATORS } from '../gen/registry';
+import { loadScene, SCENE_PREFIX } from '../gen/scene';
 import { fmtTime, store, useStore } from './store';
 
 /** Default span for a new layer: the tempo section under the playhead (MV-friendly), else 8 s. */
@@ -42,6 +43,36 @@ function useClickOutside(open: boolean, close: () => void) {
   return ref;
 }
 
+/** Scene files in <project>/scenes — listed when the generator menu opens. */
+const ScenesList: React.FC<{ onPick: (file: string) => void }> = ({ onPick }) => {
+  const [files, setFiles] = useState<string[] | null>(null);
+  const [name, setName] = useState('');
+  const [err, setErr] = useState('');
+  const refresh = () => fetch('/api/scenes').then((r) => r.json()).then((j) => setFiles(j.files ?? []));
+  useEffect(() => { refresh(); }, []);
+  const create = async () => {
+    setErr('');
+    const r = await fetch('/api/scenes', { method: 'POST', body: JSON.stringify({ name }) });
+    const j = await r.json();
+    if (!r.ok) return setErr(j.error ?? 'failed');
+    setName('');
+    onPick(j.file);
+  };
+  return (
+    <div>
+      <div className="cat" title="GLSL scene files in the project's scenes/ folder — edit them in your code editor, they reload on save">Scenes</div>
+      {files === null ? <div className="hint">…</div> : files.map((f) => (
+        <button key={f} onClick={() => onPick(f)} title={f}>{f.replace(/^scenes\//, '')}</button>
+      ))}
+      <div className="new-scene">
+        <input placeholder="new scene name" value={name} onChange={(e) => setName(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && name && create()} />
+        <button disabled={!name} onClick={create}>＋</button>
+      </div>
+      {err ? <div className="hint err">{err}</div> : null}
+    </div>
+  );
+};
+
 const CATS: [string, string][] = [['visualizer', 'Visualizers'], ['shader', 'Shaders'], ['particles', 'Particles'], ['text', 'Text'], ['shape', 'Shapes'], ['fill', 'Fills']];
 
 export const AddMenu: React.FC = () => {
@@ -56,13 +87,24 @@ export const AddMenu: React.FC = () => {
   }, [layers]);
   const ref = useClickOutside(!!open, () => setOpen(null));
   const [a, b] = open ? defaultSpan() : [0, 0];
+  // keep the popover inside the window: cap its height to the room above and shift it left if it would overflow right
+  const popRef = useRef<HTMLDivElement>(null);
+  useLayoutEffect(() => {
+    const pop = popRef.current, host = ref.current;
+    if (!pop || !host) return;
+    pop.style.left = '0px';
+    pop.style.maxHeight = `${Math.max(120, host.getBoundingClientRect().bottom - 30 - 8)}px`;
+    const r = pop.getBoundingClientRect();
+    const shift = Math.min(0, window.innerWidth - 8 - r.right);
+    pop.style.left = `${Math.max(shift, 8 - host.getBoundingClientRect().left)}px`;
+  }, [open, media.length]);
   return (
     <div className="addmenu" ref={ref}>
       <button onClick={() => setOpen(open === 'media' ? null : 'media')}>＋ Footage</button>
       <button onClick={() => setOpen(open === 'gen' ? null : 'gen')}>＋ Generator</button>
       {open === 'media' ? <span className="dim span">→ at playhead {fmtTime(store.time)}</span> : open ? <span className="dim span">→ {fmtTime(a)}–{fmtTime(b)}</span> : null}
       {open === 'media' ? (
-        <div className="popover media-grid">
+        <div className="popover media-grid" ref={popRef}>
           {media.map((m) => (
             <div key={m.id} className="thumb" onClick={() => { insert(newMediaLayer(m, ...spanFor(m))); setOpen(null); }} title={`${m.src} · ${uses.get(m.id) ?? 0}× on the timeline · right-click: add to the idea board`}
               onContextMenu={(e) => { e.preventDefault(); store.set({ footMenu: { x: e.clientX, y: e.clientY, ref: mediaRef(m) } }); }}>
@@ -86,6 +128,12 @@ export const AddMenu: React.FC = () => {
       ) : null}
       {open === 'gen' ? (
         <div className="popover gen-list">
+          <ScenesList onPick={async (file) => {
+            await loadScene(file); // so the layer gets the scene's name + param defaults
+            const id = SCENE_PREFIX + file;
+            insert(newGenLayer(id, a, b, getGen(id)?.name));
+            setOpen(null);
+          }} />
           {CATS.map(([cat, title]) => (
             <div key={cat}>
               <div className="cat">{title}</div>
