@@ -65,7 +65,7 @@ interface WordTag    { id; line: string; from: number; to: number; kind: 'replac
 - `storyboard.brief.lyrics` is **derived** from the sheet (`sheetToText`) on every edit. `project.lyrics` (word timing)
   stays the timing truth after a song exists; `LyricLine.sheet` back-references sheet lines.
 - Versions are stored outside the project file: `<project>/lyrics/versions/<id>.json` (+ profile), chat in
-  `lyrics/chat.json`, AI meaning cache in `_mvgen/lyrics-analysis.json`.
+  `lyrics/chat.json`, AI meaning cache in `_phantasma/lyrics-analysis.json`.
 
 ## 4. The editor
 
@@ -164,7 +164,7 @@ identical unlinked sections.
 ### 5.6 AI meaning analysis
 
 One structured call per changed block (`/api/sheet/analyze`, batches of 10, JSON schema `SEM_SCHEMA`), cached by
-`blockHash` in `_mvgen/lyrics-analysis.json`; runs **only on request**; unchanged blocks cost nothing. Logged in the AI log.
+`blockHash` in `_phantasma/lyrics-analysis.json`; runs **only on request**; unchanged blocks cost nothing. Logged in the AI log.
 
 ## 6. AI chat (`Chat.tsx`, `server/sheetApi.ts`)
 

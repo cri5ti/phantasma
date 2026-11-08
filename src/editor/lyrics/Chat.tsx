@@ -195,7 +195,7 @@ export const Chat: React.FC = () => {
         <button onClick={() => newThread()} disabled={busy} title="start a new conversation">New thread</button>
         <button onClick={() => lx.set({ chat: false })} title="hide the chat">✕</button>
       </div>
-      {status && !status.ok ? <div className="hint pad err">No AI provider is configured: {status.why} — add it to mvgen/.env and restart the editor.</div> : null}
+      {status && !status.ok ? <div className="hint pad err">No AI provider is configured: {status.why} — add it to phantasma/.env and restart the editor.</div> : null}
       <div className="lx-msgs">
         {!list.length ? <div className="hint pad">Ask for changes: “change these to something less literal”, “rewrite verse 2 to rhyme ABAB and keep the meter”, “where should the female voice come in?”. Select words first to point at them; the block under the cursor and its layers, tags and the style go along automatically.</div> : null}
         {list.map((m, i) => m.role === 'user' ? (

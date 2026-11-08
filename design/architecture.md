@@ -1,4 +1,4 @@
-# mvgen — system architecture
+# phantasma — system architecture
 
 A music-video generator. A **project** is a folder with a song and footage; one editor app edits it, one Remotion
 composition renders it. Everything the app knows about a project is plain JSON on disk.
@@ -27,7 +27,7 @@ npm run edit -- <projectDir>          scripts/edit.mjs
   └─ analyse audio (python/librosa) + build proxies, if missing
   └─ Vite dev server (vite.config.ts) on :5190
        ├─ serves the React editor (src/editor)
-       └─ "mvgen-api" middleware (/api/*)
+       └─ "phantasma-api" middleware (/api/*)
             ├─ project file read/write, backups, scenes, media, render jobs     (vite.config.ts)
             └─ server/storyApi.ts  →  /api/story  /api/stock  /api/ai  /api/media
                  ├─ server/lyrics.ts     /api/lyrics/*  transcribe · separate · refine (jobs)
@@ -51,13 +51,13 @@ tools (`analyze/`). Node 22, ffmpeg on PATH.
   mv.project.json             the Project (see §4). Written by the editor, atomic rename, rolling backups
   lyrics/versions/<id>.json    saved sheet versions (user content: commit-worthy, NOT regenerable)
   lyrics/chat.json             lyrics chat thread
-  _mvgen/                      generated / regenerable: analysis.json, proxies, thumbs, backups/, ai-log/,
+  _phantasma/                      generated / regenerable: analysis.json, proxies, thumbs, backups/, ai-log/,
                                lyrics/ (transcript, vocals stem), lyrics-analysis.json (AI meaning cache)
   out/                         renders
   .env                         API keys (never commit; never print)
 ```
 
-Rule: **user content lives outside `_mvgen/`; anything inside `_mvgen/` must be safe to delete.**
+Rule: **user content lives outside `_phantasma/`; anything inside `_phantasma/` must be safe to delete.**
 
 ## 4. The Project document
 
@@ -77,7 +77,7 @@ Pure logic that both the editor and renderer need lives in `src/core` and has **
   or WebGL, composited with blend modes, masks, clip-to-below, filters.
 - Parameters are evaluated per frame by `src/core/params.ts` from keyframes + modulation sources (audio scalars,
   tempo phase, LFO …). Audio features come from `AudioData` (`src/core/audio.ts`): per-frame scalars `rms bass mid high
-  onset centroid` and a spectrum, from `_mvgen/analysis.json` + binary.
+  onset centroid` and a spectrum, from `_phantasma/analysis.json` + binary.
 - **Determinism is a hard rule.** A frame must depend only on (project, frame number). Particles are closed-form per
   particle; feedback trails warm up from stored state or replay a window. Anything stateful must be scrub- and
   parallel-render-safe. `scripts/render.mjs` renders contiguous chunks in parallel processes for that reason.
@@ -90,7 +90,7 @@ Pure logic that both the editor and renderer need lives in `src/core` and has **
   Env: `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, `MV_CLAUDE_MODEL`, `MV_OPENAI_MODEL`. Keys come from `.env` (repo, then
   project folder) via `server/env.ts`.
 - `server/aiLog.ts` — **every** AI request or job is an `AiRun` (prompts, events, streamed output, usage). Finished runs
-  go to `_mvgen/ai-log/`. New AI features must log through it.
+  go to `_phantasma/ai-log/`. New AI features must log through it.
 - Interactive chat (lyrics) runs a tool loop on the server: read tools resolve against a sheet snapshot posted by the
   client; **write tools never mutate — they return proposals** that the user accepts in the UI (§ lyrics.md).
 - Provider differences are hidden in the server layer; the client only picks `'claude' | 'openai'`.

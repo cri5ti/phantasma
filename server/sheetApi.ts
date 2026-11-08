@@ -2,7 +2,7 @@
 // the AI meaning analysis of blocks and the pronunciation dictionary.
 //   <project>/lyrics/versions/<id>.json        saved versions of the sheet (+ their metrics profile)
 //   <project>/lyrics/chat.json                 chat thread: per-provider API messages (append-only) + the display log
-//   <project>/_mvgen/lyrics-analysis.json      AI meaning analysis per block, keyed by a hash of the block's text
+//   <project>/_phantasma/lyrics-analysis.json      AI meaning analysis per block, keyed by a hash of the block's text
 //   <root>/data/cmudict.json                   CMUdict (scripts/cmudict.mjs), optional
 import fs from 'node:fs';
 import path from 'node:path';
@@ -42,7 +42,7 @@ interface ChatIn {
 export function sheetApi(root: string, project: string, ai: AiLog) {
   const dictFile = path.join(root, 'data', 'cmudict.json');
   try { if (fs.existsSync(dictFile)) setDict(JSON.parse(fs.readFileSync(dictFile, 'utf8'))); } catch (e) { console.warn('cmudict: could not load', e); }
-  const semFile = path.join(project, '_mvgen', 'lyrics-analysis.json');
+  const semFile = path.join(project, '_phantasma', 'lyrics-analysis.json');
   let semCache: Record<string, BlockSemantic> | null = null;
   const sem = () => (semCache ??= (() => { try { return JSON.parse(fs.readFileSync(semFile, 'utf8')); } catch { return {}; } })());
   const saveSem = () => { fs.mkdirSync(path.dirname(semFile), { recursive: true }); fs.writeFileSync(semFile, JSON.stringify(sem())); };
@@ -192,7 +192,7 @@ export function sheetApi(root: string, project: string, ai: AiLog) {
   async function chatTurn(input: ChatIn, emit: (o: unknown) => void) {
     const provider: LLMProvider = input.provider === 'openai' ? 'openai' : 'claude';
     const st = llmStatus()[provider];
-    if (!st.available) throw new Error(`${provider === 'openai' ? 'OpenAI' : 'Claude'} isn't configured — ${st.why} (in mvgen/.env, then restart the editor)`);
+    if (!st.available) throw new Error(`${provider === 'openai' ? 'OpenAI' : 'Claude'} isn't configured — ${st.why} (in phantasma/.env, then restart the editor)`);
     const model = input.model || defaultModel(provider);
     const chat = readChat();
     const userText = turnText(input);
