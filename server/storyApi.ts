@@ -6,6 +6,7 @@ import { generateShots, llmStatus, suggestIdeas, transformCards, type LLMProvide
 import { AiLog } from './aiLog';
 import { loadEnv } from './env';
 import { lyricsApi } from './lyrics';
+import { sheetApi } from './sheetApi';
 import { Downloader, initSearchCache, providerStatus, RateLimitError, search } from './stock';
 import type { StockProvider } from '../src/core/types';
 
@@ -35,10 +36,12 @@ export function storyApi(root: string, project: string) {
   const ai = new AiLog(project);
   initSearchCache(path.join(project, '_mvgen', 'stock-cache.json'));
   const lyrics = lyricsApi(root, project, ai);
+  const sheet = sheetApi(root, project, ai);
 
   return async (req: any, res: any, url: URL, body: () => Promise<any>, send: Send): Promise<boolean> => {
     const p = url.pathname;
     if (p.startsWith('/api/lyrics/')) return lyrics(req, res, url, body, send);
+    if (p.startsWith('/api/sheet/')) return sheet(req, res, url, body, send);
     if (p === '/api/media/stale') {
       const have = known();
       const files = onDisk();

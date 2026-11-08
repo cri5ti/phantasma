@@ -25,7 +25,7 @@ export interface KeyRef {
   t: number;
 }
 
-export type Mode = 'edit' | 'story' | 'find' | 'render';
+export type Mode = 'lyrics' | 'edit' | 'story' | 'find' | 'render';
 export type SideTab = 'brief' | 'shot' | 'board' | 'ai';
 
 export interface UIState {
@@ -108,7 +108,7 @@ class Store {
       canUndo: false,
       canRedo: false,
       taps: [],
-      mode: project.storyboard?.shots.length && !project.layers.some((l) => l.shot) ? 'story' : 'edit',
+      mode: !project.audio ? 'lyrics' : project.storyboard?.shots.length && !project.layers.some((l) => l.shot) ? 'story' : 'edit',
       sideTab: 'brief',
       sbOverlay: true,
       sbMotion: false,

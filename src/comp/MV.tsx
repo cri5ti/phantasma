@@ -33,7 +33,7 @@ export function makeAsset(base: string | null | undefined) {
   return (p: string) => (/^https?:\/\//.test(p) ? p : base != null ? base + p.split('/').map(encodeURIComponent).join('/') : staticFile(p));
 }
 
-function useAnalysis(asset: (p: string) => string) {
+function useAnalysis(asset: (p: string) => string, hasAudio: boolean) {
   const [audio, setAudio] = useState<AudioData | null>(null);
   const [handle] = useState(() => delayRender('Loading audio analysis'));
   useEffect(() => {
@@ -42,7 +42,8 @@ function useAnalysis(asset: (p: string) => string) {
         setAudio(a);
         continueRender(handle);
       })
-      .catch((e) => cancelRender(e));
+      // a project without a song (lyrics stage) has no analysis yet: render silent instead of failing
+      .catch((e) => (hasAudio ? cancelRender(e) : continueRender(handle)));
   }, []);
   return audio;
 }
@@ -129,7 +130,7 @@ export const MV: React.FC<MVProps> = ({ project, media, assetBase, useProxies, r
   const frame = useCurrentFrame();
   const { fps, width: W, height: H } = useVideoConfig();
   const asset = useMemo(() => makeAsset(assetBase), [assetBase]);
-  const audio = useAnalysis(asset);
+  const audio = useAnalysis(asset, !!project.audio);
   const fontVer = useFonts(project);
   const mediaMap = useMemo(() => new Map(media.map((m) => [m.id, m])), [media]);
   useGenAssets(project, asset, mediaMap); // re-renders (→ redraws) when scenes / images land

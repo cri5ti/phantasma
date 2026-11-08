@@ -29,6 +29,13 @@ async function boot() {
   const r = await fetch('/api/project');
   if (r.ok) {
     project = await r.json();
+    // the song arrived after a lyrics-first start: attach it (analysis ran on startup)
+    if (!project.audio && info.audio[0] && audio) {
+      project.audio = info.audio[0];
+      project.duration = Math.floor(audio.duration * 100) / 100;
+      project.tempo = tempoFromAnalysis(audio.meta);
+      fresh = true;
+    }
   } else {
     fresh = true;
     const dur = audio ? Math.floor(audio.duration * 100) / 100 : 60;

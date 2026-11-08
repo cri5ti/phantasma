@@ -93,8 +93,8 @@ const AVG_WORD = 0.32; // s, used when placing words the transcript missed
  * Align the user's lyrics to a transcript: matched words take the transcript's timing, the rest are interpolated
  * between their neighbours (kept with their own line when the gap is an instrumental break).
  */
-export function alignLyrics(text: string, asr: AsrWord[], duration: number): Lyrics {
-  const parsed = parseLyricsText(text);
+export function alignLyrics(text: string | { section?: string; words: string[] }[], asr: AsrWord[], duration: number): Lyrics {
+  const parsed = typeof text === 'string' ? parseLyricsText(text) : text;
   const flat: { li: number; w: string }[] = [];
   parsed.forEach((l, li) => l.words.forEach((w) => flat.push({ li, w })));
   const asrN = asr.map((a) => norm(a.word));

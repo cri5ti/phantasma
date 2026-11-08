@@ -18,6 +18,7 @@ import { StoryPanel } from './StoryPanel';
 import { fmtTime, store, useStore, useTempo, useTime } from './store';
 import { Timeline } from './Timeline';
 import { useZoomPan } from './useZoomPan';
+import { LyricsScreen } from './lyrics/LyricsScreen';
 
 const Preview: React.FC = () => {
   const project = useStore((s) => s.project);
@@ -195,6 +196,7 @@ const TopBar: React.FC = () => {
       <button disabled={!canUndo} onClick={() => store.doUndo()} title="Ctrl+Z">↶</button>
       <button disabled={!canRedo} onClick={() => store.doRedo()} title="Ctrl+Y">↷</button>
       <div className="modes" title="Tab switches stage">
+        <button className={mode === 'lyrics' ? 'on' : ''} onClick={() => store.set({ mode: 'lyrics' })} title="write the lyrics: structure, layers, AI, versions">Lyrics</button>
         <button className={mode === 'story' ? 'on' : ''} onClick={() => store.set({ mode: 'story' })}>Storyboard</button>
         <button className={mode === 'edit' ? 'on' : ''} onClick={() => store.set({ mode: 'edit' })}>Edit</button>
         <button className={mode === 'find' ? 'on' : ''} onClick={() => openFind()} title="full-screen footage search (F)">Find footage</button>
@@ -221,6 +223,7 @@ function useShortcuts() {
         return;
       }
       const s = store.state;
+      if (s.mode === 'lyrics') return; // the lyrics stage owns its keys
       const fps = s.project.fps;
       const player = (window as any).__player as PlayerRef | undefined;
       const tempo = new Tempo(s.project.tempo, s.audio?.meta.beats ?? [], s.project.duration);
@@ -421,6 +424,7 @@ export const App: React.FC = () => {
       <Timeline />
       {mode === 'find' ? <FindScreen /> : null}
       {mode === 'render' ? <RenderScreen /> : null}
+      {mode === 'lyrics' ? <LyricsScreen /> : null}
       <HoverPeek />
       <FootageMenu />
     </div>
