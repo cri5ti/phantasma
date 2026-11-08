@@ -1,4 +1,4 @@
-// Scan a project folder for footage/images, write _mvgen/media.json and build preview proxies.
+// Scan a project folder for footage/images, write _phantasma/media.json and build preview proxies.
 // usage: npm run media -- <projectDir> [--no-proxies] [--force]
 import fs from 'node:fs';
 import path from 'node:path';

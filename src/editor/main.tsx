@@ -19,7 +19,7 @@ async function boot() {
   root.render(<div className="boot">loading…</div>);
   const info = await (await fetch('/api/info')).json();
   const media: MediaItem[] = (await (await fetch('/api/media')).json()).media;
-  const audio = await loadAnalysis((f) => enc(`_mvgen/${f}`)).catch((e) => {
+  const audio = await loadAnalysis((f) => enc(`_phantasma/${f}`)).catch((e) => {
     console.error(e);
     return null;
   });
@@ -47,7 +47,7 @@ async function boot() {
   store.set({ media, audio, zoom: Math.max(2, (window.innerWidth - 260) / project.duration) });
   linkDownloaded(media);
   if (fresh) store.save();
-  document.title = `${project.name} — mvgen`;
+  document.title = `${project.name} — phantasma`;
   // last view of this project folder (URL fragment wins over localStorage)
   const view = loadView(info.dir, info.name);
   applyView(view);

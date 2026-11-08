@@ -82,7 +82,7 @@ export function drawGen(ctx: CanvasRenderingContext2D, genId: string | undefined
   try {
     gen.draw(ctx, evalParams(params, gen.params, ec), frameCtx(env, layer));
   } catch (e) {
-    console.error(`[mvgen] generator ${genId} failed`, e);
+    console.error(`[phantasma] generator ${genId} failed`, e);
   }
   ctx.restore();
 }

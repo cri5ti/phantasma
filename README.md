@@ -1,6 +1,38 @@
-# mvgen — music video generator
+# phantasma — music video generator
 
-Audio-reactive visualizers + stock footage, composited with blend modes and masks, edited in a timeline UI, rendered with Remotion.
+Audio-reactive visualizers + stock footage, composited with blend modes and masks, edited in a timeline UI, and
+rendered with [Remotion](https://www.remotion.dev/). An optional AI storyboard stage (Claude or OpenAI) turns a song,
+its lyrics and a brief into a shot list, finds matching stock footage, and builds the timeline for you.
+
+## Features
+
+- **Timeline editor** in the browser: layers, keyframes, audio-driven modulation, blend modes, masks, clipping.
+- **Audio analysis** (librosa): bands, onsets, beats, sections, tempo candidates, with an editable tempo map.
+- **Generators**: visualizers, GLSL shaders, shapes, particles, word-timed lyrics, trails/feedback.
+- **AI storyboard** (optional): idea board, shot planning, Pexels / Pixabay stock search and download.
+- **Word-timed lyrics** via Whisper transcription + alignment (optional local Demucs/MMS_FA refinement).
+- **Deterministic rendering**: everything is a pure function of time, so scrubbing and parallel renders match exactly.
+
+## Requirements
+
+- Node.js 22+
+- Python 3 with `librosa` (`pip install librosa`)
+- `ffmpeg` on your PATH
+- Optional API keys (see below) for the storyboard, lyric transcription and stock footage
+
+## Install
+
+```
+git clone https://github.com/cri5ti/phantasma.git
+cd phantasma
+npm install
+cp .env.example .env      # then add whichever keys you want
+```
+
+API keys go in `phantasma/.env` or in a song folder's own `.env`; shell variables take precedence.
+`ANTHROPIC_API_KEY` / `OPENAI_API_KEY` power the storyboard AI, `OPENAI_API_KEY` also powers lyric transcription,
+and `PEXELS_API_KEY` / `PIXABAY_API_KEY` enable stock search. All are optional: the editor and renderer work without them.
+Keys are only read locally and sent to the respective provider; never commit your `.env`.
 
 ## Per-video workflow
 
@@ -11,11 +43,11 @@ my-video/
   song.wav
   stock/*.mp4
   mv.project.json      ← the script (created/edited by the editor)
-  _mvgen/              ← analysis, proxies, thumbs, backups (generated)
+  _phantasma/              ← analysis, proxies, thumbs, backups (generated)
   out/                 ← renders
 ```
 
-From `mvgen/` (use **PowerShell** — Remotion's compositor fails to spawn from Git-Bash on this machine):
+From the `phantasma/` folder (on Windows use **PowerShell**; Remotion's compositor can fail to spawn from Git Bash):
 
 ```powershell
 npm run edit   -- "..\my-video"                 # analyses audio + builds proxies on first run, opens http://localhost:5190
@@ -27,12 +59,10 @@ npm run media  -- "..\my-video"                 # re-scan after adding footage (
 npm run analyze -- "..\my-video"                # re-run audio analysis
 ```
 
-Requires Node 22, Python 3 with `librosa`, and ffmpeg on PATH.
-
 ## Storyboard stage
 
 Toggle **Storyboard / Edit** in the top bar (or **Tab**). Everything is saved in `mv.project.json` under `storyboard`
-(undoable, per song folder). Put API keys in `mvgen/.env` or the song folder's `.env` (see `.env.example`).
+(undoable, per song folder). Put API keys in `phantasma/.env` or the song folder's `.env` (see `.env.example`).
 
 1. **Brief & AI** — director prompt, look & style, lyrics (plain or LRC `[mm:ss.xx]`). Pick Claude or OpenAI.
    - **✦ Suggest ideas** → AI idea cards on the board (tagged, with model/time provenance).
@@ -57,7 +87,7 @@ Toggle **Storyboard / Edit** in the top bar (or **Tab**). Everything is saved in
 - **Word-timed lyrics** (Brief & AI tab → Word timing): paste or *Load .txt/.lrc*, then **🎤 Transcribe + align** —
   OpenAI `whisper-1` (per-word timestamps; `MV_TRANSCRIBE_MODEL` to override) transcribes the song, then your text is
   aligned to it word by word: your words and line breaks win, the transcript supplies timing, missed words are
-  interpolated (shown hatched). **⇄ Re-align** reuses the saved transcript (`_mvgen/lyrics/transcript.json`) after you
+  interpolated (shown hatched). **⇄ Re-align** reuses the saved transcript (`_phantasma/lyrics/transcript.json`) after you
   fix the text — no API call. **→ LRC** writes the timed lines back into the brief for the storyboard AI.
 - **Precise timing (local, optional):** *Isolate vocals* (Demucs) and *⌖ Refine timing* (torchaudio MMS_FA forced
   alignment per line, `analyze/align.py`) — needs
@@ -144,3 +174,12 @@ src/editor           React editor (Vite) — player, timeline, inspector, storyb
 server               editor API add-ons: LLM (Claude / OpenAI), stock providers + download queue
 scripts              edit / render / media / analyze CLIs
 ```
+
+## Credits & licensing of footage
+
+Downloaded stock clips keep their provider's license (Pexels / Pixabay); attribution is logged in `stock/credits.json`
+in your project. Check the provider terms before publishing a video.
+
+## License
+
+[MIT](LICENSE)

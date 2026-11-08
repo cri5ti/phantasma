@@ -27,7 +27,7 @@ export type MVProps = {
   maskScale?: number;
 };
 
-export const WORK_DIR = '_mvgen';
+export const WORK_DIR = '_phantasma';
 
 export function makeAsset(base: string | null | undefined) {
   return (p: string) => (/^https?:\/\//.test(p) ? p : base != null ? base + p.split('/').map(encodeURIComponent).join('/') : staticFile(p));

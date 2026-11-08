@@ -7,7 +7,7 @@ node_modules/
 !.env.example
 
 # per-song working data / renders if they ever live inside this folder
-_mvgen/
+_phantasma/
 out/
 
 # python / editor / OS noise

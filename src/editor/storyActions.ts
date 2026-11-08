@@ -55,7 +55,7 @@ export const STOCK_ORDER: StockProvider[] = ['pexels', 'pixabay', 'mixkit'];
 export async function stockProviders(preferred?: StockProvider): Promise<StockProvider[]> {
   const st = await status();
   const ok = STOCK_ORDER.filter((p) => st.stock[p]?.available);
-  if (!ok.length) throw new Error('no stock provider configured - set PIXABAY_API_KEY (or PEXELS_API_KEY) in mvgen/.env and restart the editor');
+  if (!ok.length) throw new Error('no stock provider configured - set PIXABAY_API_KEY (or PEXELS_API_KEY) in phantasma/.env and restart the editor');
   return preferred && ok.includes(preferred) ? [preferred, ...ok.filter((p) => p !== preferred)] : ok;
 }
 

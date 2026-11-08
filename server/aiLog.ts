@@ -1,5 +1,5 @@
 // Every AI request is a "run": the exact prompts, live progress events, streamed thinking summary + response,
-// usage and timing. Running runs live in memory; finished ones are written to <project>/_mvgen/ai-log/<id>.json.
+// usage and timing. Running runs live in memory; finished ones are written to <project>/_phantasma/ai-log/<id>.json.
 import fs from 'node:fs';
 import path from 'node:path';
 
@@ -36,7 +36,7 @@ export class AiLog {
   private dir: string;
 
   constructor(projectDir: string) {
-    this.dir = path.join(projectDir, '_mvgen', 'ai-log');
+    this.dir = path.join(projectDir, '_phantasma', 'ai-log');
   }
 
   start(kind: string, provider: string, model: string, system: string, user: string): AiRun {

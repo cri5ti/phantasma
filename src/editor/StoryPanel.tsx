@@ -193,7 +193,7 @@ const BriefTab: React.FC = () => {
         <label>Stock</label>
         <StockSelect value={stock} onChange={setStock} />
         {svc && !STOCK_ORDER.some((p) => svc.stock[p].available)
-          ? <span className="warn" title="add a key to mvgen/.env and restart the editor">no stock API key set (PIXABAY_API_KEY / PEXELS_API_KEY)</span>
+          ? <span className="warn" title="add a key to phantasma/.env and restart the editor">no stock API key set (PIXABAY_API_KEY / PEXELS_API_KEY)</span>
           : <StockUsage provider={stock} />}
       </div>
       <div className="btns">
@@ -225,7 +225,7 @@ const BriefTab: React.FC = () => {
           ))}
         </details>
       ) : null}
-      <div className="hint">Keys live in <code>mvgen/.env</code> or the song folder's <code>.env</code>: ANTHROPIC_API_KEY, OPENAI_API_KEY, PEXELS_API_KEY, PIXABAY_API_KEY.</div>
+      <div className="hint">Keys live in <code>phantasma/.env</code> or the song folder's <code>.env</code>: ANTHROPIC_API_KEY, OPENAI_API_KEY, PEXELS_API_KEY, PIXABAY_API_KEY.</div>
     </div>
   );
 };
