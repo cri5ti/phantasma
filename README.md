@@ -79,6 +79,9 @@ Toggle **Storyboard / Edit** in the top bar (or **Tab**). Everything is saved in
   transform/filter params, masks, and optional **clip to below** (Photoshop clipping mask).
 - **Params** are constants or animated: `{ "$k": [{t, v, e}], "$mod": [{src, amount, release, curve, gate}] }`.
   Keyframes use absolute song time. Modulation sources: `rms bass mid high onset centroid beat bar lfo sectionProgress layerProgress`.
+- **Dopesheet**: ▸ on a layer head expands one track per keyframed param (masks included). Click a key = select +
+  seek, Shift/Ctrl+click = add, drag on a track = box-select, drag a key = move the selection (snaps; Alt = free),
+  click a track name = all its keys, Del = delete, right-click = easing. Key shape shows the easing (square = hold).
 - **Masks** reuse generators (shape, text, gradient, even visualizers) as alpha or luminance, combined add/subtract/intersect, with feather + invert.
 
 ## Generators: trails, lyrics, particles
@@ -96,6 +99,31 @@ Toggle **Storyboard / Edit** in the top bar (or **Tab**). Everything is saved in
   bursts on beats/bars, gravity / wind / drag / turbulence / sway / spin, 10 shapes, colour over life, twinkle, blend.
   Presets: Rain, Snow, Dust, Stars, Smoke, Leaves, Embers, Bokeh, Confetti, Fireflies, Beat burst — in *＋ Generator*
   and the Inspector's *Preset* menu (keeps the layer's transform/look).
+
+## Scene layers (per-project GLSL)
+
+For compositions the layer stack can't express (depth-aware effects, perspective mapping, multi-map relighting), write
+a fragment shader in the project folder: `scenes/<name>.frag`. Add it from **＋ Generator → Scenes** (or create a new
+one there from the template). The editor polls the file and recompiles on save; GLSL errors are drawn on the layer
+and shown in the Inspector (and fail a final render instead of rendering a blank layer).
+
+Header lines become Inspector controls and injected uniforms (don't declare them):
+
+```glsl
+// @name  Night window
+// @tex   plate  dif1                wrap=clamp|repeat|mirror   → sampler2D t_plate, vec2 t_plate_size (media picker)
+// @param speed  int    6  -24 24    group=Streaks hint="…"     → float u_speed   (keyframes + audio modulation work)
+// @param tint   color  #ffd9b0                                 → vec4 u_tint
+// @param on     bool   true                                    → float u_on (0/1)
+```
+
+Available: everything shaders get (`uTime uBeat uPulse uBar uBass uMid uHigh uRms uOnset uSpec[] spec() hash() noise()
+fbm()`), plus `uLayerT uFps uBpm uBeatPhase uBarPhase`, `luma()`, `screenB()` and `coverUV(uv, texSize)`.
+`vUv` and texture uvs both have their origin bottom-left. For seamless loops, drive all motion from
+`fract(uTime / loopSec)` with whole cycles per loop (see `9 - midnight train/scenes/night-window.frag`).
+
+The **Image** generator (*Fills*) draws any media image with cover / contain / stretch / tile and scroll (with a
+loop-exact speed rounding). Being a generator, it also works as a **mask source** (e.g. a painted luminance matte).
 
 ## Adding a visualizer
 

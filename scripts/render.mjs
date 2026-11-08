@@ -91,7 +91,7 @@ if (still) {
   const args = ['remotion', 'still', 'src/remotion/index.ts', 'MV', out, `--props=${propsPath}`, `--public-dir=${dir}`, `--frame=${Math.round(Number(flag('at') ?? 0) * fps)}`];
   if (flag('scale')) args.push(`--scale=${flag('scale')}`);
   console.log(`> npx ${args.join(' ')}`);
-  await run('npx', args.map((a) => (/\s/.test(a) ? `"${a}"` : a)), { cwd: ROOT });
+  await run('npx', args, { cwd: ROOT });
   console.log(`\nwrote ${out}`);
   process.exit(0);
 }

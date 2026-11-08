@@ -12,11 +12,11 @@ if (flag('reanalyze') || !fs.existsSync(path.join(work, 'analysis.json'))) {
   const audio = findAudio(dir);
   if (!audio) throw new Error(`No audio file found in ${dir}`);
   console.log(`Analysing ${audio} …`);
-  await run('python', [path.join(ROOT, 'analyze', 'analyze.py'), path.join(dir, audio), work].map((a) => `"${a}"`));
+  await run('python', [path.join(ROOT, 'analyze', 'analyze.py'), path.join(dir, audio), work]);
 }
 if (!fs.existsSync(path.join(work, 'media.json'))) {
   console.log('Scanning media and building proxies …');
-  await run('node', [path.join(ROOT, 'scripts', 'media.mjs'), dir].map((a) => `"${a}"`));
+  await run('node', [path.join(ROOT, 'scripts', 'media.mjs'), dir]);
 }
 
 process.env.MV_PROJECT = dir;

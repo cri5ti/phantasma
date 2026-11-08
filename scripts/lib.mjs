@@ -59,8 +59,20 @@ export function probe(file) {
 
 export function run(cmd, args, opts = {}) {
   return new Promise((resolve, reject) => {
-    const p = spawn(cmd, args, { stdio: 'inherit', shell: process.platform === 'win32', ...opts });
-    p.on('exit', (code) => (code === 0 ? resolve() : reject(new Error(`${cmd} exited ${code}`))));
+    const win = process.platform === 'win32';
+    // Without a shell, args are passed verbatim; on Windows (shell) they must be quoted.
+    const argv = win ? args.map((a) => `"${a}"`) : args;
+    const p = spawn(cmd, argv, { stdio: 'inherit', shell: win, ...opts });
+    const desc = `${cmd} ${args.map((a) => (/\s/.test(a) ? JSON.stringify(a) : a)).join(' ')}`;
+    p.on('error', (err) =>
+      reject(new Error(err.code === 'ENOENT'
+        ? `Could not start "${cmd}": not found on PATH. Is it installed / is the right environment active?`
+        : `Could not start "${cmd}": ${err.message}`)));
+    p.on('exit', (code, signal) => {
+      if (code === 0) return resolve();
+      const why = signal ? `was killed by ${signal}` : `failed with exit code ${code}`;
+      reject(new Error(`Command ${why}:\n  ${desc}\n(see output above for details)`));
+    });
   });
 }
 

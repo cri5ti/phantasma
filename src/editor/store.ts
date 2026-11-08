@@ -18,6 +18,13 @@ export interface Selection {
   groupId?: string;
 }
 
+/** a keyframe in the dopesheet: layer + param path ("p.<key>" | "m.<maskId>.<key>") + time */
+export interface KeyRef {
+  layer: string;
+  path: string;
+  t: number;
+}
+
 export type Mode = 'edit' | 'story' | 'find' | 'render';
 export type SideTab = 'brief' | 'shot' | 'board' | 'ai';
 
@@ -61,6 +68,10 @@ export interface UIState {
   focusGroup: string | null;
   /** right-click menu on a footage thumbnail */
   footMenu: { x: number; y: number; ref: StockRef } | null;
+  /** layers expanded into dopesheet tracks */
+  dope: string[];
+  /** selected keyframes (dopesheet) */
+  keySel: KeyRef[];
 }
 
 type Listener = () => void;
@@ -107,6 +118,8 @@ class Store {
       peek: null,
       focusGroup: null,
       footMenu: null,
+      dope: [],
+      keySel: [],
     };
   }
 

@@ -19,3 +19,6 @@ __pycache__/
 Thumbs.db
 *.log
 *.tmp
+
+# offline optical-flow tools (analyze/morph.py)
+.venv-flow/
